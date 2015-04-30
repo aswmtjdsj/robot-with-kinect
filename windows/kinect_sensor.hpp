@@ -7,6 +7,8 @@
 
 #include <opencv2/opencv.hpp>
 
+#include "chat.hpp"
+
 template<class Interface>
 inline void SafeRelease(Interface *& pInterfaceToRelease)
 {
@@ -16,7 +18,18 @@ inline void SafeRelease(Interface *& pInterfaceToRelease)
 	}
 }
 
-int kinectSensor() {
+void printJointInfo(const Joint & jt, const JointOrientation & jt_or, const string & jt_name) {
+	std::cerr << "<" << jt_name << 
+		"> position (" << jt.Position.X <<
+		", " << jt.Position.Y <<
+		", " << jt.Position.Z <<
+		")\t orietation (" << jt_or.Orientation.w <<
+		", " << jt_or.Orientation.x <<
+		", " << jt_or.Orientation.y <<
+		", " << jt_or.Orientation.z << ")\n";
+}
+
+int kinectSensor(chat_client & _c) {
 	cv::setUseOptimized(true);
 
 	// Sensor
@@ -167,11 +180,9 @@ int kinectSensor() {
 	cv::Mat visualMat(depth_height, depth_width, CV_8UC3);
 	cv::Mat mapperMat(depth_height, depth_width, CV_8UC3);
 
-	std::vector <int> s;
 	std::map<int, cv::Vec3b> color_map;
 	std::map<int, cv::Vec3f> re_map;
 	std::map<int, int> color_map_count;
-	s.resize(depth_height * depth_width);
 
 	cv::namedWindow("Depth");
 	cv::namedWindow("Color");
@@ -206,6 +217,14 @@ int kinectSensor() {
 		std::cout << "[Success] ICoordinateMapper::get_CoordinateMapper()" << std::endl;
 			IBodyFrame * pBodyFrame = nullptr; // body
 	}
+	ColorSpacePoint * spacePt = new ColorSpacePoint[depth_height * depth_width];
+
+	cv::Point prev_points[4]; // only for ONE arm
+	for (int i = 0; i < 4; i++) {
+		prev_points[i] = cv::Point(-1, -1);
+	}
+	// for continuous command
+	int accumulator = 0;
 
 	while (1){
 		// Frame
@@ -307,7 +326,6 @@ int kinectSensor() {
 			imshow("Normal", normalMat);
 
 			// for mapping, from depth to color
-			ColorSpacePoint * spacePt = new ColorSpacePoint[depth_height * depth_width];
 			mapper->MapDepthFrameToColorSpace(depth_height * depth_width, (UINT16 *)bufferDepthMat.data, depth_height * depth_width, spacePt);
 
 			if (has_color) {
@@ -326,7 +344,6 @@ int kinectSensor() {
 				}
 				cv::imshow("Mapper", mapperMat);
 			}
-			delete[] spacePt;
 		}
 
 		if (SUCCEEDED(hResult)){
@@ -359,40 +376,153 @@ int kinectSensor() {
 					JointOrientation pOrientations[JointType::JointType_Count];
 					pBodies[i]->GetJointOrientations(JointType::JointType_Count, pOrientations);
 
-					// output HEAD information
-					JointType headJointType = JointType::JointType_Head;
-					const Joint& headJointPos = pJoints[headJointType];
-					const JointOrientation& headJointOri = pOrientations[headJointType];
+					int move[4] = { 0 };
+					for (int j = 0; j < JointType::JointType_Count; j++) {
+						const Joint& jt = pJoints[j];
+						const JointOrientation& jt_or = pOrientations[j];
 
-					if (headJointPos.TrackingState != TrackingState_NotTracked) {
-						//std::cout << "[Success] head: " << headJointPos.Position << "\n" << headJointOri.Orientation << endl;
-						std::cout << "[Success] <head #" << i << 
-							"> position (" << headJointPos.Position.X << 
-							", " << headJointPos.Position.Y << 
-							", " << headJointPos.Position.Z << 
-							")\t orietation (" << headJointOri.Orientation.w << 
-							", " << headJointOri.Orientation.x << 
-							", " << headJointOri.Orientation.y << 
-							", " << headJointOri.Orientation.z << ")\n";
+						// draw all joints
+						if (jt.TrackingState != TrackingState_NotTracked) {
+							/*std::cerr << "[Success] #" << i << ' ';
+							printJointInfo(jt, jt_or, to_string(j));*/
+
+							// re-mapping the joint position
+							CameraSpacePoint cameraPt = jt.Position;
+							ColorSpacePoint colorPt;
+							int num_pt = 1;
+							hResult = mapper->MapCameraPointsToColorSpace(num_pt, &cameraPt, num_pt, &colorPt);
+							colorPt.X = floor(colorPt.X);
+							colorPt.Y = floor(colorPt.Y);
+							if (colorPt.X >= 0 && colorPt.X < color_width
+								&& colorPt.Y >= 0 && colorPt.Y < color_height) {
+								cv::Point to_draw;
+								to_draw.x = colorPt.X;
+								to_draw.y = colorPt.Y;
+								int radius = 25;
+								if (jt.TrackingState == TrackingState_Inferred) {
+									circle(colorMat, to_draw, radius, cv::Scalar(0., 0., 255.));
+								} else {
+									circle(colorMat, to_draw, radius, cv::Scalar(0., 0., 255.), -1);
+								}
+								if (j >= 8 && j <= 11) {
+									if (prev_points[j - 8] != cv::Point(-1, -1)) {
+										// output diff
+										/*cout << j << ' '
+											<< to_draw.x - prev_points[j - 8].x << ' '
+											<< to_draw.y - prev_points[j - 8].y << '\n'; */
+										move[j - 8] = to_draw.y - prev_points[j - 8].y;
+									}
+									prev_points[j - 8] = to_draw;
+								}
+								cv::Point text_corner = to_draw;
+								text_corner.x += radius;
+								text_corner.y += radius;
+								putText(colorMat, to_string(j), text_corner,
+									cv::FONT_HERSHEY_SIMPLEX, 1.5, cv::Scalar(0., 255., 255.), 2);
+							}
+						}
 					}
 
+					if (abs(move[2]) > 10 && abs(move[3]) > 10) {
+						// right arm moved
+						if (move[2] > 10 && move[3] > 10) {
+							// down
+							// std::cerr << "Down -> Start!" << '\n';
+							if (accumulator >= 0) {
+								accumulator++;
+							}
+							else {
+								accumulator = 0;
+							}
+						}
+						else if(move[2] < -10 && move[3] < -10) {
+							// up
+							// std::cerr << "Up -> Stop!" << '\n';
+							if (accumulator <= 0) {
+								accumulator--;
+							}
+							else {
+								accumulator = 0;
+							}
+						}
+						else {
+							// I don't know what!
+							// std::cerr << "Error -> I don't know what!" << '\n';
+							accumulator = 0;
+						}
+					}
+
+					if (abs(accumulator) > 3) { // threshold
+
+						string command;
+						if (accumulator > 0) {
+							command = "3 Start -> Real Start!";
+							std::cerr << command << '\n';
+							command = "[kinect] start";
+						}
+						else {
+							command = "3 Stop -> Real Stop!";
+							std::cerr << command << '\n';
+							command = "[kinect] stop";
+						}
+						accumulator = 0;
+
+						chat_message msg;
+						msg.body_length(command.size());
+						std::memcpy(msg.body(), command.c_str(), msg.body_length());
+						msg.encode_header();
+						_c.write(msg);
+					}
+
+					/*
 					// output LEFT HAND information
 					JointType leftHandJointType = JointType::JointType_HandLeft;
 					const Joint& leftHandJointPos = pJoints[leftHandJointType];
 					const JointOrientation& leftHandJointOri = pOrientations[leftHandJointType];
 
-					/*if (leftHandJointPos.TrackingState != TrackingState_NotTracked) {
-						//std::cout << "[Success] head: " << headJointPos.Position << "\n" << headJointOri.Orientation << endl;
-						std::cout << "[Success] <left hand #" << i << 
-							"> position (" << leftHandJointPos.Position.X << 
-							", " << leftHandJointPos.Position.Y << 
-							", " << leftHandJointPos.Position.Z << 
-							")\t orietation (" << leftHandJointOri.Orientation.w << 
-							", " << leftHandJointOri.Orientation.x << 
-							", " << leftHandJointOri.Orientation.y << 
-							", " << leftHandJointOri.Orientation.z << ")\n";
+					if (leftHandJointPos.TrackingState != TrackingState_NotTracked) {
+						std::cerr << "[Success] #" << i << ' ';
+						printJointInfo(leftHandJointPos, leftHandJointOri, "Left Hand");
+
+						CameraSpacePoint cameraPt = leftHandJointPos.Position;
+						ColorSpacePoint colorPt;
+						int num_pt = 1;
+						hResult = mapper->MapCameraPointsToColorSpace(num_pt, &cameraPt, num_pt, &colorPt);
+						colorPt.X = floor(colorPt.X);
+						colorPt.Y = floor(colorPt.Y);
+						if (colorPt.X >= 0 && colorPt.X < color_width
+							&& colorPt.Y >= 0 && colorPt.Y < color_height) {
+							cv::Point to_draw;
+							to_draw.x = colorPt.X;
+							to_draw.y = colorPt.Y;
+							circle(colorMat, to_draw, 30, cv::Scalar(0., 255., 0.), -1);
+						}
+					}
+
+					// output RIGHT HAND information
+					JointType rightHandJointType = JointType::JointType_HandRight;
+					const Joint& rightHandJointPos = pJoints[rightHandJointType];
+					const JointOrientation& rightHandJointOri = pOrientations[rightHandJointType];
+
+					if (rightHandJointPos.TrackingState != TrackingState_NotTracked) {
+						std::cerr << "[Success] #" << i << ' ';
+						printJointInfo(rightHandJointPos, rightHandJointOri, "Right Hand");
+
+						CameraSpacePoint cameraPt = rightHandJointPos.Position;
+						ColorSpacePoint colorPt;
+						int num_pt = 1;
+						hResult = mapper->MapCameraPointsToColorSpace(num_pt, &cameraPt, num_pt, &colorPt);
+						colorPt.X = floor(colorPt.X);
+						colorPt.Y = floor(colorPt.Y);
+						if (colorPt.X >= 0 && colorPt.X < color_width
+							&& colorPt.Y >= 0 && colorPt.Y < color_height) {
+							cv::Point to_draw;
+							to_draw.x = colorPt.X;
+							to_draw.y = colorPt.Y;
+							circle(colorMat, to_draw, 30, cv::Scalar(255., 0., 0.), -1);
+						}
 					}*/
-				}
+				} // is_tracked
 
 			}
 
@@ -425,6 +555,11 @@ int kinectSensor() {
 	}
 
 	// clean junk
+
+	if (spacePt != nullptr) {
+		delete[] spacePt;
+	}
+
 	SafeRelease(pDepthSource);
 	SafeRelease(pDepthReader);
 	SafeRelease(pDepthDescription);
@@ -442,6 +577,7 @@ int kinectSensor() {
 	if (pSensor){
 		pSensor->Close();
 	}
+
 	SafeRelease(pSensor);
 	cv::destroyAllWindows();
 	return 0;
