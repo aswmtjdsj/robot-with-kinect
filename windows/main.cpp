@@ -6,7 +6,7 @@ using namespace std;
 
 int main(int argc, char* argv[])
 {
-	/*try
+	try
 	{
 		if (argc != 3)
 		{
@@ -23,14 +23,15 @@ int main(int argc, char* argv[])
 		std::thread t([&io_service](){ io_service.run(); });
 
 		char line[chat_message::max_body_length + 1];
-		while (std::cin.getline(line, chat_message::max_body_length + 1))
+		kinectSensor(c);
+		/*while (std::cin.getline(line, chat_message::max_body_length + 1))
 		{
 			chat_message msg;
 			msg.body_length(std::strlen(line));
 			std::memcpy(msg.body(), line, msg.body_length());
 			msg.encode_header();
 			c.write(msg);
-		}
+		}*/
 
 		c.close();
 		t.join();
@@ -38,8 +39,7 @@ int main(int argc, char* argv[])
 	catch (std::exception& e)
 	{
 		std::cerr << "Exception: " << e.what() << "\n";
-	}*/
+	}
 
-	kinectSensor();
 	return 0;
 }
