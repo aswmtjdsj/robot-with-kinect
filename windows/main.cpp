@@ -1,6 +1,7 @@
 #include "common.h"
 #include "chat.hpp"
 #include "kinect_sensor.hpp"
+#include "gesture.hpp"
 
 using namespace std;
 
@@ -8,16 +9,18 @@ int main(int argc, char* argv[])
 {
 	try
 	{
-		if (argc != 3)
+		/*if (argc != 3)
 		{
 			std::cerr << "Usage: chat_client <host> <port>\n";
 			return 1;
-		}
+		}*/
 
 		asio::io_service io_service;
 
 		tcp::resolver resolver(io_service);
-		auto endpoint_iterator = resolver.resolve({ argv[1], argv[2] });
+		const char * host = "localhost", *port = "8888";
+		// auto endpoint_iterator = resolver.resolve({ argv[1], argv[2] });
+		auto endpoint_iterator = resolver.resolve({ host, port });
 		chat_client c(io_service, endpoint_iterator);
 
 		std::thread t([&io_service](){ io_service.run(); });
