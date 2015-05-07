@@ -2,24 +2,18 @@
 #define KINECT_SENSOR_HPP
 
 #include <kinect.h>
+#include <Kinect.VisualGestureBuilder.h>
 
 #include <Windows.h>
 
 #include <opencv2/opencv.hpp>
 
 #include "chat.hpp"
-
-template<class Interface>
-inline void SafeRelease(Interface *& pInterfaceToRelease)
-{
-	if (pInterfaceToRelease != NULL){
-		pInterfaceToRelease->Release();
-		pInterfaceToRelease = NULL;
-	}
-}
+using namespace std;
+using namespace cv;
 
 void printJointInfo(const Joint & jt, const JointOrientation & jt_or, const string & jt_name) {
-	std::cerr << "<" << jt_name << 
+	std::cerr << "<" << jt_name <<
 		"> position (" << jt.Position.X <<
 		", " << jt.Position.Y <<
 		", " << jt.Position.Z <<
@@ -39,7 +33,8 @@ int kinectSensor(chat_client & _c) {
 	if (FAILED(hResult)) {
 		std::cerr << "[Error] GetDefaultKinectSensor" << std::endl;
 		return -1;
-	} else {
+	}
+	else {
 		std::cout << "[Success] GetDefaultKinectSensor" << std::endl;
 	}
 
@@ -47,7 +42,8 @@ int kinectSensor(chat_client & _c) {
 	if (FAILED(hResult)) {
 		std::cerr << "[Error] IKinectSensor::Open()" << std::endl;
 		return -1;
-	} else {
+	}
+	else {
 		std::cout << "[Success] IKinectSensor::Open()" << std::endl;
 	}
 
@@ -58,7 +54,8 @@ int kinectSensor(chat_client & _c) {
 	if (FAILED(hResult)) {
 		std::cerr << "[Error] IKinectSensor::get_DepthFrameSource()" << std::endl;
 		return -1;
-	} else {
+	}
+	else {
 		std::cout << "[Success] IKinectSensor::get_DepthFrameSource()" << std::endl;
 	}
 
@@ -67,7 +64,8 @@ int kinectSensor(chat_client & _c) {
 	if (FAILED(hResult)) {
 		std::cerr << "[Error] IKinectSensor::get_ColorFrameSource()" << std::endl;
 		return -1;
-	} else {
+	}
+	else {
 		std::cout << "[Success] IKinectSensor::get_ColorFrameSource()" << std::endl;
 	}
 
@@ -76,7 +74,8 @@ int kinectSensor(chat_client & _c) {
 	if (FAILED(hResult)) {
 		std::cerr << "[Error] IBodyFrameSource::get_BodyFrameSource()" << std::endl;
 		return -1;
-	} else {
+	}
+	else {
 		std::cout << "[Success] IBodyFrameSource::get_BodyFrameSource()" << std::endl;
 	}
 
@@ -85,7 +84,8 @@ int kinectSensor(chat_client & _c) {
 	if (FAILED(hResult)) {
 		std::cerr << "[Error] IB// delete [] odyIndexFrameSource::get_BodyIndexFrameSource()" << std::endl;
 		return -1;
-	} else {
+	}
+	else {
 		std::cout << "[Success] IBodyIndexFrameSource::get_BodyIndexFrameSource()" << std::endl;
 	}
 
@@ -96,7 +96,8 @@ int kinectSensor(chat_client & _c) {
 	if (FAILED(hResult)) {
 		std::cerr << "[Error] IDepthFrameSource::OpenReader()" << std::endl;
 		return -1;
-	} else {
+	}
+	else {
 		std::cout << "[Success] IDepthFrameSource::OpenReader()" << std::endl;
 	}
 
@@ -105,7 +106,8 @@ int kinectSensor(chat_client & _c) {
 	if (FAILED(hResult)) {
 		std::cerr << "[Error] IColorFrameSource::OpenReader()" << std::endl;
 		return -1;
-	} else {
+	}
+	else {
 		std::cout << "[Success] IColorFrameSource::OpenReader()" << std::endl;
 	}
 
@@ -114,7 +116,8 @@ int kinectSensor(chat_client & _c) {
 	if (FAILED(hResult)) {
 		std::cerr << "[Error] IBodyFrameReader::OpenReader()" << std::endl;
 		return -1;
-	} else {
+	}
+	else {
 		std::cout << "[Success] IBodyFrameReader::OpenReader()" << std::endl;
 	}
 
@@ -123,7 +126,8 @@ int kinectSensor(chat_client & _c) {
 	if (FAILED(hResult)) {
 		std::cerr << "[Error] IBodyIndexFrameReader::OpenReader()" << std::endl;
 		return -1;
-	} else {
+	}
+	else {
 		std::cout << "[Success] IBodyIndexFrameReader::OpenReader()" << std::endl;
 	}
 
@@ -133,14 +137,29 @@ int kinectSensor(chat_client & _c) {
 
 	hResult = pDepthSource->get_FrameDescription(&pDepthDescription);
 	if (FAILED(hResult)){
-		std::cerr << "[Error] IDepthFrameSource::get_FrameDescription()" << std::endl;
+		std::cerr << "[_Error] IDepthFrameSource::get_FrameDescription()" << std::endl;
 		return -1;
-	} else {
+	}
+	else {
 		std::cout << "[Success] IDepthFrameSource::get_FrameDescription()" << std::endl;
 	}
 
 	pDepthDescription->get_Width(&depth_width);
+	if (FAILED(hResult)){
+		std::cerr << "[Error] IFrameDescription::get_Width()" << std::endl;
+		return -1;
+	}
+	else {
+		std::cout << "[Success] IFrameDescription::get_Width()" << std::endl;
+	}
 	pDepthDescription->get_Height(&depth_height);
+	if (FAILED(hResult)){
+		std::cerr << "[Error] IFrameDescription::get_Height()" << std::endl;
+		return -1;
+	}
+	else {
+		std::cout << "[Success] IFrameDescription::get_Height()" << std::endl;
+	}
 
 	unsigned int depth_point_num = depth_width * depth_height;
 	unsigned int bufferDepthSize = depth_point_num * sizeof(unsigned short);
@@ -156,8 +175,23 @@ int kinectSensor(chat_client & _c) {
 		std::cout << "[Success] IColorFrameSource::get_FrameDescription()" << std::endl;
 	}
 
-	pColorDescription->get_Width(&color_width);
+	hResult = pColorDescription->get_Width(&color_width);
+	if (FAILED(hResult)){
+		std::cerr << "[Error] IFrameDescription::get_Width()" << std::endl;
+		return -1;
+	}
+	else {
+		std::cout << "[Success] IFrameDescription::get_Width()" << std::endl;
+	}
+
 	pColorDescription->get_Height(&color_height);
+	if (FAILED(hResult)){
+		std::cerr << "[Error] IFrameDescription::get_Height()" << std::endl;
+		return -1;
+	}
+	else {
+		std::cout << "[Success] IFrameDescription::get_Height()" << std::endl;
+	}
 	unsigned int bufferColorSize = color_width * color_height * sizeof(RGBQUAD);
 	std::cout << "Color: w_" << color_width << ", h_" << color_height << std::endl;
 	std::cout << "Color Buffer Size: " << bufferColorSize << std::endl;
@@ -165,7 +199,21 @@ int kinectSensor(chat_client & _c) {
 	// Range
 	unsigned short depth_min = 0, depth_max = 0;
 	pDepthSource->get_DepthMinReliableDistance(&depth_min); // 500
+	if (FAILED(hResult)){
+		std::cerr << "[Error] IDepthFrameSource::get_DepthMinReliableDistance()" << std::endl;
+		return -1;
+	}
+	else {
+		std::cout << "[Success] IDepthFrameSource::get_DepthMinReliableDistance()" << std::endl;
+	}
 	pDepthSource->get_DepthMaxReliableDistance(&depth_max); // 4500
+	if (FAILED(hResult)){
+		std::cerr << "[Error] IDepthFrameSource::get_DepthMaxReliableDistance()" << std::endl;
+		return -1;
+	}
+	else {
+		std::cout << "[Success] IDepthFrameSource::get_DepthMaxReliableDistance()" << std::endl;
+	}
 	std::cout << "Depth Range : " << depth_min << " - " << depth_max << std::endl;
 
 	RGBQUAD * pColorRGBX = new RGBQUAD[color_width * color_height];
@@ -215,16 +263,174 @@ int kinectSensor(chat_client & _c) {
 	}
 	else {
 		std::cout << "[Success] ICoordinateMapper::get_CoordinateMapper()" << std::endl;
-			IBodyFrame * pBodyFrame = nullptr; // body
 	}
+
 	ColorSpacePoint * spacePt = new ColorSpacePoint[depth_height * depth_width];
 
-	cv::Point prev_points[4]; // only for ONE arm
-	for (int i = 0; i < 4; i++) {
-		prev_points[i] = cv::Point(-1, -1);
+	// visual gesture builder
+	IVisualGestureBuilderDatabase * vgb_database = nullptr;
+	IVisualGestureBuilderFrameSource * vgb_source[BODY_COUNT];
+	IVisualGestureBuilderFrameReader * vgb_reader[BODY_COUNT];
+
+	for (uint i = 0; i < BODY_COUNT; i++) {
+		hResult = CreateVisualGestureBuilderFrameSource(pSensor, 0, &vgb_source[i]);
+		if (FAILED(hResult)){
+			// cerr << "[Error] IVisualGestureBuilderFrameSource::CreateVisualGestureBuilderFrameSource()[" << i << "]: " << hResult << endl;
+			return -1;
+		}
+		else {
+			// cout << "[Success] IVisualGestureBuilderFrameSource::CreateVisualGestureBuilderFrameSource()[" << i << "]: " << hResult << endl;
+		}
+
+		hResult = vgb_source[i]->OpenReader(&vgb_reader[i]);
+		if (FAILED(hResult)){
+			// cerr << "[Error] IVisualGestureBuilderFrameSource::OpenReader()[" << i << "]: " << hResult << endl;
+			return -1;
+		}
+		else {
+			// cout << "[Success] IVisualGestureBuilderFrameSource::OpenReader()[" << i << "]: " << hResult << endl;
+		}
 	}
-	// for continuous command
-	int accumulator = 0;
+
+	hResult = CreateVisualGestureBuilderDatabaseInstanceFromFile(L"HandUp.gba", &vgb_database);
+	if (FAILED(hResult)) {
+		cerr << "[Error] IVisualGestureBuilderDatabase::CreateVisualGestureBuilderDatabaseInstanceFromFile(): " << hResult << endl;
+		return -1;
+	}
+	else {
+		cout << "[Success] IVisualGestureBuilderDatabase::CreateVisualGestureBuilderDatabaseInstanceFromFile(): " << hResult << endl;
+	}
+
+	uint gesture_count = 0;
+	hResult = vgb_database->get_AvailableGesturesCount(&gesture_count);
+	if (FAILED(hResult)){
+		cerr << "[Error] IVisualGestureBuilderDatabase::get_AvailableGesturesCount(): " << hResult << endl;
+		return -1;
+	}
+	else {
+		cout << "[Error] IVisualGestureBuilderDatabase::get_AvailableGesturesCount(): " << hResult << endl;
+	}
+
+	IGesture * g_hand_over_head;
+	hResult = vgb_database->get_AvailableGestures(gesture_count, &g_hand_over_head);
+	if (FAILED(hResult)){
+		cerr << "[Error] IVisualGestureBuilderDatabase::get_AvailableGestures(): " << hResult << endl;
+		return 1;
+	}
+	else {
+		cout << "[Success] IVisualGestureBuilderDatabase::get_AvailableGestures(): " << hResult << endl;
+	}
+
+	GestureType g_type;
+	g_hand_over_head->get_GestureType(&g_type);
+	cerr << "gesture type: " << g_type << endl;
+
+	wchar_t g_name[1000];
+	g_hand_over_head->get_Name(1000, g_name);
+	wcout << "gesture name: " << g_name << endl;
+
+	SafeRelease(vgb_database);
+	hResult = CreateVisualGestureBuilderDatabaseInstanceFromFile(L"Swipe.gba", &vgb_database);
+	if (FAILED(hResult)) {
+		cerr << "[Error] IVisualGestureBuilderDatabase::CreateVisualGestureBuilderDatabaseInstanceFromFile(): " << hResult << endl;
+		return -1;
+	}
+	else {
+		cout << "[Success] IVisualGestureBuilderDatabase::CreateVisualGestureBuilderDatabaseInstanceFromFile(): " << hResult << endl;
+	}
+
+	gesture_count = 0;
+	hResult = vgb_database->get_AvailableGesturesCount(&gesture_count);
+	if (FAILED(hResult)){
+		cerr << "[Error] IVisualGestureBuilderDatabase::get_AvailableGesturesCount(): " << hResult << endl;
+		return -1;
+	}
+	else {
+		cout << "[Error] IVisualGestureBuilderDatabase::get_AvailableGesturesCount(): " << hResult << endl;
+	}
+	IGesture * g_swiping;
+	hResult = vgb_database->get_AvailableGestures(gesture_count, &g_swiping);
+	if (FAILED(hResult)){
+		cerr << "[Error] IVisualGestureBuilderDatabase::get_AvailableGestures(): " << hResult << endl;
+		return 1;
+	}
+	else {
+		cout << "[Success] IVisualGestureBuilderDatabase::get_AvailableGestures(): " << hResult << endl;
+	}
+
+	g_swiping->get_GestureType(&g_type);
+	cerr << "gesture type: " << g_type << endl;
+
+	g_swiping->get_Name(1000, g_name);
+	wcout << "gesture name: " << g_name << endl;
+
+	// multiple gestures
+	SafeRelease(vgb_database);
+	hResult = CreateVisualGestureBuilderDatabaseInstanceFromFile(L"SampleDatabase.gbd", &vgb_database);
+	if (FAILED(hResult)) {
+		cerr << "[Error] IVisualGestureBuilderDatabase::CreateVisualGestureBuilderDatabaseInstanceFromFile(): " << hResult << endl;
+		return -1;
+	}
+	else {
+		cout << "[Success] IVisualGestureBuilderDatabase::CreateVisualGestureBuilderDatabaseInstanceFromFile(): " << hResult << endl;
+	}
+
+	uint multi_gesture_count = 0;
+	hResult = vgb_database->get_AvailableGesturesCount(&multi_gesture_count);
+	if (FAILED(hResult)){
+		cerr << "[Error] IVisualGestureBuilderDatabase::get_AvailableGesturesCount(): " << hResult << endl;
+		return -1;
+	}
+	else {
+		cout << "[Error] IVisualGestureBuilderDatabase::get_AvailableGesturesCount(): " << hResult << endl;
+	}
+	IGesture ** multiple_gestures = new IGesture *[multi_gesture_count];
+	hResult = vgb_database->get_AvailableGestures(multi_gesture_count, multiple_gestures);
+	if (FAILED(hResult)){
+		cerr << "[Error] IVisualGestureBuilderDatabase::get_AvailableGestures(): " << hResult << endl;
+		return 1;
+	}
+	else {
+		cout << "[Success] IVisualGestureBuilderDatabase::get_AvailableGestures(): " << hResult << endl;
+	}
+
+	cerr << "number of gestures in database: " << multi_gesture_count << endl;
+	for (uint g = 0; g < multi_gesture_count; g++) {
+		multiple_gestures[g]->get_GestureType(&g_type);
+		cerr << "gesture type: " << g_type << endl;
+
+		multiple_gestures[g]->get_Name(1000, g_name);
+		wcout << "gesture name: " << g_name << endl;
+	}
+
+	for (uint i = 0; i < BODY_COUNT; i++){
+		// hResult = vgb_source[i]->AddGestures(gesture_count, gestures);
+		hResult = vgb_source[i]->AddGesture(g_hand_over_head);
+		hResult = vgb_source[i]->AddGesture(g_swiping);
+		for (uint g = 0; g < multi_gesture_count; g++) {
+			hResult = vgb_source[i]->AddGesture(multiple_gestures[g]);
+		}
+		if (FAILED(hResult)){
+			//std::cerr << "[Error] IVisualGestureBuilderFrameSource::AddGesture() -> " << std::hex << hResult << std::endl;
+			return -1;
+		}
+		else {
+			// std::cout << "[Success] IVisualGestureBuilderFrameSource::AddGesture()" << std::endl;
+		}
+
+		hResult = vgb_source[i]->SetIsEnabled(g_hand_over_head, true);
+		hResult = vgb_source[i]->SetIsEnabled(g_swiping, true);
+		for (uint g = 0; g < multi_gesture_count; g++) {
+			hResult = vgb_source[i]->SetIsEnabled(multiple_gestures[g], true);
+		}
+		if (FAILED(hResult)){
+			// std::cerr << "[Error] IVisualGestureBuilderFrameSource::SetIsEnabled()" << std::endl;
+			return -1;
+		}
+		else {
+			// std::cout << "[Success] IVisualGestureBuilderFrameSource::SetIsEnabled()" << std::endl;
+		}
+	}
 
 	while (1){
 		// Frame
@@ -238,31 +444,49 @@ int kinectSensor(chat_client & _c) {
 
 		hResult = pColorReader->AcquireLatestFrame(&pColorFrame);
 		//printf("ColorFrame: %16x\n", pColorFrame);
-		if (SUCCEEDED(hResult)){
-			pColorFrame->get_RawColorImageFormat(&imageFormat);
-			if (imageFormat == ColorImageFormat_Bgra) {
-				std::cout << "[Info] ColorImageFormat: BGRA" << std::endl;
+		if (FAILED(hResult)){
+			// cerr << "[Error] IColorFrameReader::AcquireLatestFrame(): " << hResult << endl;
+			SafeRelease(pColorFrame);
+			continue;
+		}
+		hResult = pColorFrame->get_RawColorImageFormat(&imageFormat);
+		if (FAILED(hResult)){
+			cerr << "[Error] IColorFrame::get_RawColorImageFormat(): " << hResult << endl;
+			SafeRelease(pColorFrame);
+			continue;
+		}
+
+		if (imageFormat == ColorImageFormat_Bgra) {
+			std::cout << "[Info] ColorImageFormat: BGRA" << std::endl;
+		}
+		else {
+			//hResult = pColorFrame->AccessRawUnderlyingBuffer(&bufferColorSize, reinterpret_cast<BYTE**>(&bufferColorMat.data));
+			hResult = pColorFrame->CopyConvertedFrameDataToArray(bufferColorSize, reinterpret_cast<BYTE *>(pColorRGBX), ColorImageFormat_Bgra);
+			if (SUCCEEDED(hResult)){
+				colorMat = cv::Mat(color_height, color_width, CV_8UC4, pColorRGBX);
+				//resize(colorMat, colorShowMat, cv::Size(depth_width, depth_height));
+				//cv::imshow("Color", colorShowMat);
+				has_color = true;
 			}
 			else {
-				//hResult = pColorFrame->AccessRawUnderlyingBuffer(&bufferColorSize, reinterpret_cast<BYTE**>(&bufferColorMat.data));
-				hResult = pColorFrame->CopyConvertedFrameDataToArray(bufferColorSize, reinterpret_cast<BYTE *>(pColorRGBX), ColorImageFormat_Bgra);
-				if (SUCCEEDED(hResult)){
-					colorMat = cv::Mat(color_height, color_width, CV_8UC4, pColorRGBX);
-					//resize(colorMat, colorShowMat, cv::Size(depth_width, depth_height));
-					//cv::imshow("Color", colorShowMat);
-					has_color = true;
-				}
+				cerr << "[Error] IColorFrame::CopyConvertedFrameDataToArray(): " << hResult << endl;
+				SafeRelease(pColorFrame);
+				continue;
 			}
-			/*else if (1) {
-			std::cout << "[Info] ColorImageFormat: RGBQUAD" << std::endl;
-			}*/
 		}
+		/*else if (1) {
+		std::cout << "[Info] ColorImageFormat: RGBQUAD" << std::endl;
+		}*/
 
 		hResult = pDepthReader->AcquireLatestFrame(&pDepthFrame);
 		//printf("DepthFrame: %16x\n", pDepthFrame);
 
 		if (SUCCEEDED(hResult)){
 			hResult = pDepthFrame->AccessUnderlyingBuffer(&bufferDepthSize, reinterpret_cast<UINT16**>(&bufferDepthMat.data));
+			if (FAILED(hResult)) {
+				cerr << "[Error] IDepthFrame::AccessUnderlyingBuffer(): " << std::hex << hResult << endl;
+				continue;
+			}
 
 			// for visualization and normal 
 			visualMat = cv::Mat(depth_height, depth_width, CV_8UC3);
@@ -293,11 +517,11 @@ int kinectSensor(chat_client & _c) {
 								normalMat.at<cv::Vec3b>(y, x)[0] = a * no * 127. + 127.;
 								normalMat.at<cv::Vec3b>(y, x)[1] = b * no * 127. + 127.;
 								normalMat.at<cv::Vec3b>(y, x)[2] = c * no * 127. + 127.;
-							}
-						}
-					}
-				}
-			}
+							} // if square sum
+						} // if x y boundary
+					} // if valid depth value
+				} // for x
+			} // for y
 
 			// filer normal matrix, using 3x3 avg
 			for (int y = 0; y < depth_height; y++) {
@@ -312,37 +536,43 @@ int kinectSensor(chat_client & _c) {
 								t_cnt++;
 								for (int biu = 0; biu < 3; biu++) {
 									c[biu] += normalMat.at<cv::Vec3b>(ny, nx)[biu];
+								} // for 3 channel
+							} // if nx ny within boundary
+						} // for K
+					} // for k
+					for (int biu = 0; biu < 3; biu++) {//#
+						c[biu] /= t_cnt;
+					} // regularization for three channel
+					normalMat.at<cv::Vec3b>(y, x) = c;
+				} // for x
+			} // for y
+			imshow("Visual", visualMat);
+			imshow("Normal", normalMat);
+
+			// for mapping, from depth to co/salute.gbdlor
+			hResult = mapper->MapDepthFrameToColorSpace(depth_height * depth_width, (UINT16 *)bufferDepthMat.data, depth_height * depth_width, spacePt);
+
+			if (SUCCEEDED(hResult)) {
+				if (has_color) {
+					mapperMat = cv::Mat(depth_height, depth_width, CV_8UC3);
+					for (int y = 0; y < depth_height; y++) {
+						for (int x = 0; x < depth_width; x++) {
+							ColorSpacePoint pt = spacePt[y * depth_width + x];
+							pt.X = floor(pt.X);
+							pt.Y = floor(pt.Y);
+							if (pt.X >= 0 && pt.X < color_width && pt.Y >= 0 && pt.Y < color_height) {
+								for (int k = 0; k < 3; k++) {
+									mapperMat.at<cv::Vec3b>(y, x)[k] = colorMat.at<cv::Vec4b>(pt.Y, pt.X)[k];
 								}
 							}
 						}
 					}
-					for (int biu = 0; biu < 3; biu++) {
-						c[biu] /= t_cnt;
-					}
-					normalMat.at<cv::Vec3b>(y, x) = c;
-				}
+					cv::imshow("Mapper", mapperMat);
+				} // has_color
 			}
-			imshow("Visual", visualMat);
-			imshow("Normal", normalMat);
-
-			// for mapping, from depth to color
-			mapper->MapDepthFrameToColorSpace(depth_height * depth_width, (UINT16 *)bufferDepthMat.data, depth_height * depth_width, spacePt);
-
-			if (has_color) {
-				mapperMat = cv::Mat(depth_height, depth_width, CV_8UC3);
-				for (int y = 0; y < depth_height; y++) {
-					for (int x = 0; x < depth_width; x++) {
-						ColorSpacePoint pt = spacePt[y * depth_width + x];
-						pt.X = floor(pt.X);
-						pt.Y = floor(pt.Y);
-						if (pt.X >= 0 && pt.X < color_width && pt.Y >= 0 && pt.Y < color_height) {
-							for (int k = 0; k < 3; k++) {
-								mapperMat.at<cv::Vec3b>(y, x)[k] = colorMat.at<cv::Vec4b>(pt.Y, pt.X)[k];
-							}
-						}
-					}
-				}
-				cv::imshow("Mapper", mapperMat);
+			else {
+				cerr << "[Error] ICoordinateMapper::MapDepthFrameToColorSpace(): " << hResult << endl;
+				continue;
 			}
 		}
 
@@ -350,199 +580,199 @@ int kinectSensor(chat_client & _c) {
 
 			hResult = pBodyReader->AcquireLatestFrame(&pBodyFrame);
 
-			int body_count = 0;
-			hResult = pBodySource->get_BodyCount(&body_count);
-			// std::cout << "[Success] IBodyFrameSource::get_BodyCount() > " << body_count << std::endl;
-			
-			IBody ** pBodies = new IBody *[body_count];
-			for (int i = 0; i < body_count; i++) {
-				pBodies[i] = nullptr;
-			}
+			if (SUCCEEDED(hResult)){
+				int body_count = 0;
+				hResult = pBodySource->get_BodyCount(&body_count);
+				// std::cout << "[Success] IBodyFrameSource::get_BodyCount() > " << body_count << std::endl;
+				if (SUCCEEDED(hResult)){
+					IBody ** pBodies = new IBody *[body_count];
+					for (int i = 0; i < body_count; i++) {
+						pBodies[i] = nullptr;
+					}
+					if (SUCCEEDED(hResult)){
+						hResult = pBodyFrame->GetAndRefreshBodyData(body_count, pBodies);
+						for (uint i = 0; i < BODY_COUNT; i++) {
 
-			hResult = pBodyFrame->GetAndRefreshBodyData(body_count, pBodies);
-			for (int i = 0; i < body_count; i++) {
-				BOOLEAN is_tracked = false;
-				hResult = pBodies[i]->get_IsTracked(&is_tracked);
 
-				//  std::cout << i << ' ' << (int)is_tracked << endl;
-				if (is_tracked) {
-					// std::cout << "[Success] <tracked> " << i << endl;
+							BOOLEAN is_tracked = false;
+							hResult = pBodies[i]->get_IsTracked(&is_tracked);
+							if (is_tracked) {
+								// get joint position
+								Joint pJoints[JointType::JointType_Count];
+								pBodies[i]->GetJoints(JointType::JointType_Count, pJoints);
+								// get joint orientation
+								JointOrientation pOrientations[JointType::JointType_Count];
+								pBodies[i]->GetJointOrientations(JointType::JointType_Count, pOrientations);
 
-					// get joint position
-					Joint pJoints[JointType::JointType_Count];
-					pBodies[i]->GetJoints(JointType::JointType_Count, pJoints);
-
-					// get joint orientation
-					JointOrientation pOrientations[JointType::JointType_Count];
-					pBodies[i]->GetJointOrientations(JointType::JointType_Count, pOrientations);
-
-					int move[4] = { 0 };
-					for (int j = 0; j < JointType::JointType_Count; j++) {
-						const Joint& jt = pJoints[j];
-						const JointOrientation& jt_or = pOrientations[j];
-
-						// draw all joints
-						if (jt.TrackingState != TrackingState_NotTracked) {
-							/*std::cerr << "[Success] #" << i << ' ';
-							printJointInfo(jt, jt_or, to_string(j));*/
-
-							// re-mapping the joint position
-							CameraSpacePoint cameraPt = jt.Position;
-							ColorSpacePoint colorPt;
-							int num_pt = 1;
-							hResult = mapper->MapCameraPointsToColorSpace(num_pt, &cameraPt, num_pt, &colorPt);
-							colorPt.X = floor(colorPt.X);
-							colorPt.Y = floor(colorPt.Y);
-							if (colorPt.X >= 0 && colorPt.X < color_width
-								&& colorPt.Y >= 0 && colorPt.Y < color_height) {
-								cv::Point to_draw;
-								to_draw.x = colorPt.X;
-								to_draw.y = colorPt.Y;
-								int radius = 25;
-								if (jt.TrackingState == TrackingState_Inferred) {
-									circle(colorMat, to_draw, radius, cv::Scalar(0., 0., 255.));
-								} else {
-									circle(colorMat, to_draw, radius, cv::Scalar(0., 0., 255.), -1);
+								// Set TrackingID to Detect Gesture
+								UINT64 trackingId = _UI64_MAX;
+								hResult = pBodies[i]->get_TrackingId(&trackingId);
+								if (SUCCEEDED(hResult)){
+									vgb_source[i]->put_TrackingId(trackingId);
 								}
-								if (j >= 8 && j <= 11) {
-									if (prev_points[j - 8] != cv::Point(-1, -1)) {
-										// output diff
-										/*cout << j << ' '
-											<< to_draw.x - prev_points[j - 8].x << ' '
-											<< to_draw.y - prev_points[j - 8].y << '\n'; */
-										move[j - 8] = to_draw.y - prev_points[j - 8].y;
-									}
-									prev_points[j - 8] = to_draw;
-								}
-								cv::Point text_corner = to_draw;
-								text_corner.x += radius;
-								text_corner.y += radius;
-								putText(colorMat, to_string(j), text_corner,
-									cv::FONT_HERSHEY_SIMPLEX, 1.5, cv::Scalar(0., 255., 255.), 2);
-							}
-						}
+
+								int move[4] = { 0 };
+								for (int j = 0; j < JointType::JointType_Count; j++) {
+									const Joint& jt = pJoints[j];
+									const JointOrientation& jt_or = pOrientations[j];
+
+									// draw all joints
+									if (jt.TrackingState != TrackingState_NotTracked) {
+										/*std::cerr << "[Success] #" << i << ' ';
+										printJointInfo(jt, jt_or, to_string(j));*/
+
+										// re-mapping the joint position
+										CameraSpacePoint cameraPt = jt.Position;
+										ColorSpacePoint colorPt;
+										int num_pt = 1;
+										hResult = mapper->MapCameraPointsToColorSpace(num_pt, &cameraPt, num_pt, &colorPt);
+										colorPt.X = floor(colorPt.X);
+										colorPt.Y = floor(colorPt.Y);
+										if (colorPt.X >= 0 && colorPt.X < color_width
+											&& colorPt.Y >= 0 && colorPt.Y < color_height) {
+											cv::Point to_draw;
+											to_draw.x = colorPt.X;
+											to_draw.y = colorPt.Y;
+											int radius = 25;
+											if (jt.TrackingState == TrackingState_Inferred) {
+												circle(colorMat, to_draw, radius, cv::Scalar(0., 0., 255.));
+											}
+											else {
+												circle(colorMat, to_draw, radius, cv::Scalar(0., 0., 255.), -1);
+											}
+											cv::Point text_corner = to_draw;
+											text_corner.x += radius;
+											text_corner.y += radius;
+											putText(colorMat, to_string(j), text_corner,
+												cv::FONT_HERSHEY_SIMPLEX, 1.5, cv::Scalar(0., 255., 255.), 2);
+										} // colorPt within boundary
+									} // if tracking
+								} // for joints
+
+							} // is_tracked
+
+						} // for i in bodies
+
+						for (int i = 0; i < body_count; i++) {
+							SafeRelease(pBodies[i]);
+						} // safe release
+						delete[] pBodies;
+
+						bufferDepthMat.convertTo(depthMat, CV_8U, 255.0f / 4500.0f, .0f); //-255.0f / 4500.0f, 255.0f);
+						cv::imshow("Depth", depthMat);
+						cv::Mat colorResizedMat = cv::Mat(colorMat.rows / 2, colorMat.cols / 2, colorMat.type());
+						cv::resize(colorMat, colorResizedMat, cv::Size(colorResizedMat.cols, colorResizedMat.rows));
+						cv::imshow("Color", colorResizedMat);
 					}
-
-					if (abs(move[2]) > 10 && abs(move[3]) > 10) {
-						// right arm moved
-						if (move[2] > 10 && move[3] > 10) {
-							// down
-							// std::cerr << "Down -> Start!" << '\n';
-							if (accumulator >= 0) {
-								accumulator++;
-							}
-							else {
-								accumulator = 0;
-							}
-						}
-						else if(move[2] < -10 && move[3] < -10) {
-							// up
-							// std::cerr << "Up -> Stop!" << '\n';
-							if (accumulator <= 0) {
-								accumulator--;
-							}
-							else {
-								accumulator = 0;
-							}
-						}
-						else {
-							// I don't know what!
-							// std::cerr << "Error -> I don't know what!" << '\n';
-							accumulator = 0;
-						}
+					else {
+						cerr << "[Error] IBodyFrame::GetAndRefreshBodyData(): " << hResult << endl;
+						continue;
 					}
-
-					if (abs(accumulator) > 3) { // threshold
-
-						string command;
-						if (accumulator > 0) {
-							command = "3 Start -> Real Start!";
-							std::cerr << command << '\n';
-							command = "[kinect] start";
-						}
-						else {
-							command = "3 Stop -> Real Stop!";
-							std::cerr << command << '\n';
-							command = "[kinect] stop";
-						}
-						accumulator = 0;
-
-						chat_message msg;
-						msg.body_length(command.size());
-						std::memcpy(msg.body(), command.c_str(), msg.body_length());
-						msg.encode_header();
-						_c.write(msg);
-					}
-
-					/*
-					// output LEFT HAND information
-					JointType leftHandJointType = JointType::JointType_HandLeft;
-					const Joint& leftHandJointPos = pJoints[leftHandJointType];
-					const JointOrientation& leftHandJointOri = pOrientations[leftHandJointType];
-
-					if (leftHandJointPos.TrackingState != TrackingState_NotTracked) {
-						std::cerr << "[Success] #" << i << ' ';
-						printJointInfo(leftHandJointPos, leftHandJointOri, "Left Hand");
-
-						CameraSpacePoint cameraPt = leftHandJointPos.Position;
-						ColorSpacePoint colorPt;
-						int num_pt = 1;
-						hResult = mapper->MapCameraPointsToColorSpace(num_pt, &cameraPt, num_pt, &colorPt);
-						colorPt.X = floor(colorPt.X);
-						colorPt.Y = floor(colorPt.Y);
-						if (colorPt.X >= 0 && colorPt.X < color_width
-							&& colorPt.Y >= 0 && colorPt.Y < color_height) {
-							cv::Point to_draw;
-							to_draw.x = colorPt.X;
-							to_draw.y = colorPt.Y;
-							circle(colorMat, to_draw, 30, cv::Scalar(0., 255., 0.), -1);
-						}
-					}
-
-					// output RIGHT HAND information
-					JointType rightHandJointType = JointType::JointType_HandRight;
-					const Joint& rightHandJointPos = pJoints[rightHandJointType];
-					const JointOrientation& rightHandJointOri = pOrientations[rightHandJointType];
-
-					if (rightHandJointPos.TrackingState != TrackingState_NotTracked) {
-						std::cerr << "[Success] #" << i << ' ';
-						printJointInfo(rightHandJointPos, rightHandJointOri, "Right Hand");
-
-						CameraSpacePoint cameraPt = rightHandJointPos.Position;
-						ColorSpacePoint colorPt;
-						int num_pt = 1;
-						hResult = mapper->MapCameraPointsToColorSpace(num_pt, &cameraPt, num_pt, &colorPt);
-						colorPt.X = floor(colorPt.X);
-						colorPt.Y = floor(colorPt.Y);
-						if (colorPt.X >= 0 && colorPt.X < color_width
-							&& colorPt.Y >= 0 && colorPt.Y < color_height) {
-							cv::Point to_draw;
-							to_draw.x = colorPt.X;
-							to_draw.y = colorPt.Y;
-							circle(colorMat, to_draw, 30, cv::Scalar(255., 0., 0.), -1);
-						}
-					}*/
-				} // is_tracked
-
+				}
+				else {
+					cerr << "[Error] IBodyFrameSource::get_BodyCount(): " << hResult << endl;
+					continue;
+				}
 			}
-
-			/*hResult = pBodyIndexReader->AcquireLatestFrame(&pBodyIndexFrame);
-			// pBodyIndexFrame->CopyFrameDataToArray()
-			// hResult = pBodyIndexFrame->AccessUnderlyingBuffer(&bufferDepthSize, 
-			//	reinterpret_cast<UINT16**>(&bufferDepthMat.data));
-			*/
-
-			for (int i = 0; i < body_count; i++) {
-				SafeRelease(pBodies[i]);
+			else {
+				cerr << "[Error] IBodyFrameReader::AcquireLatestFrame(): " << hResult << endl;
+				continue;
 			}
-			delete [] pBodies;
-
-			bufferDepthMat.convertTo(depthMat, CV_8U, 255.0f / 4500.0f, .0f); //-255.0f / 4500.0f, 255.0f);
-			cv::imshow("Depth", depthMat);
-			cv::Mat colorResizedMat = cv::Mat(colorMat.rows / 2, colorMat.cols / 2, colorMat.type());
-			cv::resize(colorMat, colorResizedMat, cv::Size(colorResizedMat.cols, colorResizedMat.rows));
-			cv::imshow("Color", colorResizedMat);
 		}
+
+		for (uint i = 0; i < BODY_COUNT; i++) {
+			IVisualGestureBuilderFrame* vgb_frame = nullptr;
+			hResult = vgb_reader[i]->CalculateAndAcquireLatestFrame(&vgb_frame);
+			if (SUCCEEDED(hResult) && vgb_frame != nullptr){
+				BOOLEAN gesture_tracked = false;
+				hResult = vgb_frame->get_IsTrackingIdValid(&gesture_tracked);
+				if (SUCCEEDED(hResult) && gesture_tracked){
+					IDiscreteGestureResult* discrete_result = nullptr;
+					// hand over head
+					hResult = vgb_frame->get_DiscreteGestureResult(g_hand_over_head, &discrete_result);
+					if (SUCCEEDED(hResult) && discrete_result != nullptr){
+						BOOLEAN bDetected = false;
+						hResult = discrete_result->get_Detected(&bDetected);
+						if (SUCCEEDED(hResult) && bDetected){
+							std::cout << "hand over head Gesture detected" << std::endl;
+							chat_message msg;
+							string head_msg = "[kinect] button";
+							msg.body_length(head_msg.size());
+							std::memcpy(msg.body(), head_msg.c_str(), msg.body_length());
+							cout << head_msg << endl;
+							msg.encode_header();
+							_c.write(msg);
+						}
+					}
+					SafeRelease(discrete_result);
+
+					// Continuous Gesture (Sample Swipe.gba is Action to Swipe the hand in horizontal direction.)
+					IContinuousGestureResult* continuous_result = nullptr;
+					hResult = vgb_frame->get_ContinuousGestureResult(g_swiping, &continuous_result);
+					// cerr << hex << hResult << endl;
+					// cerr << "result is null: " << (pGestureResult == nullptr) << endl;
+					if (SUCCEEDED(hResult) && continuous_result != nullptr){
+						float progress = 0.0f;
+						hResult = continuous_result->get_Progress(&progress);
+						if (SUCCEEDED(hResult)){
+							// std::cout << "Progress: " + std::to_string(progress) << std::endl;
+						}
+					}
+					SafeRelease(continuous_result);
+
+					for (uint g = 0; g < multi_gesture_count; g++) {
+						GestureType g_type;
+						multiple_gestures[g]->get_GestureType(&g_type);
+						if (g_type == GestureType_Discrete) {
+							hResult = vgb_frame->get_DiscreteGestureResult(multiple_gestures[g], &discrete_result);
+							if (SUCCEEDED(hResult) && discrete_result != nullptr){
+								BOOLEAN bDetected = false;
+								hResult = discrete_result->get_Detected(&bDetected);
+								if (SUCCEEDED(hResult) && bDetected){
+									wchar_t gesture_name[1000];
+									multiple_gestures[g]->get_Name(1000, gesture_name);
+									std::wcout << gesture_name << std::endl;
+									chat_message msg;
+									wstring w_msg = gesture_name;
+									std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+									std::string s_msg = converter.to_bytes(w_msg);
+									string multi_msg = "[kinect] ";
+									if (s_msg == "Steer_Left") {
+										multi_msg += "left";
+									}
+									else if (s_msg == "Steer_Right") {
+										multi_msg += "right";
+									}
+									else {
+										multi_msg += "go";
+									}
+									msg.body_length(multi_msg.size());
+									std::memcpy(msg.body(), multi_msg.c_str(), msg.body_length());
+									msg.encode_header();
+									cout << multi_msg << endl;
+									_c.write(msg);
+								}
+							}
+							SafeRelease(discrete_result);
+						}
+						else if (g_type == GestureType_Continuous) {
+							hResult = vgb_frame->get_ContinuousGestureResult(multiple_gestures[g], &continuous_result);
+							float progress = 0.0f;
+							hResult = continuous_result->get_Progress(&progress);
+							if (SUCCEEDED(hResult)){
+								wchar_t gesture_name[1000];
+								multiple_gestures[g]->get_Name(1000, gesture_name);
+								// std::wcout << gesture_name << L": " << std::endl;
+								// std::cout << std::to_string(progress) << std::endl;
+							}
+							SafeRelease(continuous_result);
+						}
+					}
+				}
+			}
+			SafeRelease(vgb_frame);
+		}
+
 
 		SafeRelease(pDepthFrame);
 		SafeRelease(pColorFrame);
@@ -573,6 +803,12 @@ int kinectSensor(chat_client & _c) {
 
 	SafeRelease(pBodyIndexSource);
 	SafeRelease(pBodyIndexReader);
+
+	for (uint i = 0; i < BODY_COUNT; i++) {
+		SafeRelease(vgb_source[i]);
+		SafeRelease(vgb_reader[i]);
+	}
+	SafeRelease(vgb_database);
 
 	if (pSensor){
 		pSensor->Close();
