@@ -744,7 +744,7 @@ int kinectSensor(chat_client & _c) {
 										multi_msg += "right";
 									}
 									else {
-										multi_msg += "go";
+										multi_msg += "forward";
 									}
 									msg.body_length(multi_msg.size());
 									std::memcpy(msg.body(), multi_msg.c_str(), msg.body_length());
