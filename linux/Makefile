@@ -1,6 +1,6 @@
 CC=g++
 CFLAGS=--std=c++0x -DASIO_STANDALONE -pthread
-INC=-I/home/parlinyu/repo/asio-1.10.6/include
+INC=-I/home/parlin/trunk/asio-1.10.6/include
 EXEC=chat_server chat_client
 
 chat_client:chat_client.cpp
