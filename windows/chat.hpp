@@ -108,11 +108,13 @@ private:
 			write_msgs_.front().length()),
 			[this](std::error_code ec, std::size_t /*length*/)
 		{
+			// cout << "to_send" << endl;
 			if (!ec)
 			{
 				write_msgs_.pop_front();
 				if (!write_msgs_.empty())
 				{
+					// cout << "sent" << endl;
 					do_write();
 				}
 			}
