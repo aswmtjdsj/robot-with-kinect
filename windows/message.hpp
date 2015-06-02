@@ -28,7 +28,7 @@ public:
 
 	const char* data() const
 	{
-		return data_;
+		return data_;// 
 	}
 
 	char* data()
