@@ -18,7 +18,7 @@ int main(int argc, char* argv[])
 		asio::io_service io_service;
 
 		tcp::resolver resolver(io_service);
-		const char * host = "localhost", *port = "8888";
+		const char * host = "10.0.0.10", *port = "8888";
 		// auto endpoint_iterator = resolver.resolve({ argv[1], argv[2] });
 		auto endpoint_iterator = resolver.resolve({ host, port });
 		chat_client c(io_service, endpoint_iterator);
@@ -26,6 +26,7 @@ int main(int argc, char* argv[])
 		std::thread t([&io_service](){ io_service.run(); });
 
 		char line[chat_message::max_body_length + 1];
+		// io_service.run();
 		kinectSensor(c);
 		/*while (std::cin.getline(line, chat_message::max_body_length + 1))
 		{
