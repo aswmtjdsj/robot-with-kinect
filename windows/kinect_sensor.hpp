@@ -8,6 +8,8 @@
 
 #include <opencv2/opencv.hpp>
 
+#include <comdef.h>
+
 #include "chat.hpp"
 using namespace std;
 using namespace cv;
@@ -26,7 +28,10 @@ void printJointInfo(const Joint & jt, const JointOrientation & jt_or, const stri
 int checkResult(const HRESULT & hr, const string & prompt, bool display = true) {
 	if (FAILED(hr)) {
 		if (display) {
-			std::cerr << "[ERROR] " << prompt << '\n';
+			_com_error err(hr);
+			LPCTSTR errMsg = err.ErrorMessage();
+			std::wcerr << "[ERROR] <" << errMsg << "> ";
+			std::cerr << prompt << '\n';
 		}
 		return -1;
 	}
@@ -166,6 +171,8 @@ int kinectSensor(chat_client & _c) {
 
 	cv::Mat bufferDepthMat(depth_height, depth_width, CV_16UC1);
 	cv::Mat depthMat(depth_height, depth_width, CV_8UC1);
+	cv::Mat bufferCutMat(depth_height, depth_width, CV_8UC1);
+	unsigned int bufferCutSize = depth_height * depth_width * sizeof(unsigned char);
 
 	cv::Mat colorMat;
 	cv::Mat colorShowMat;
@@ -173,6 +180,7 @@ int kinectSensor(chat_client & _c) {
 	cv::Mat normalMat(depth_height, depth_width, CV_8UC3);
 	cv::Mat visualMat(depth_height, depth_width, CV_8UC3);
 	cv::Mat mapperMat(depth_height, depth_width, CV_8UC3);
+	cv::Mat cutMat(depth_height, depth_width, CV_8UC3);
 
 	std::map<int, cv::Vec3b> color_map;
 	std::map<int, cv::Vec3f> re_map;
@@ -183,6 +191,7 @@ int kinectSensor(chat_client & _c) {
 	// cv::namedWindow("Visual");
 	cv::namedWindow("Mapper");
 	// cv::namedWindow("Normal");
+	cv::namedWindow("Cut");
 
 	int frameCount = 0;
 	DWORD threadID = 0;
@@ -226,6 +235,7 @@ int kinectSensor(chat_client & _c) {
 		}
 	}
 
+	// hand up gesture
 	hResult = CreateVisualGestureBuilderDatabaseInstanceFromFile(L"HandUp.gba", &vgb_database);
 	if (checkResult(hResult, "IVisualGestureBuilderDatabase::CreateVisualGestureBuilderDatabaseInstanceFromFile()[\"HandUp.gba\"]: " + to_string(hResult)) != 0) {
 		return -1;
@@ -259,6 +269,8 @@ int kinectSensor(chat_client & _c) {
 	std::wcout << "[INFO] gesture name: " << g_name << endl;
 
 	SafeRelease(vgb_database);
+
+	// swipe gesture
 	hResult = CreateVisualGestureBuilderDatabaseInstanceFromFile(L"Swipe.gba", &vgb_database);
 	if (checkResult(hResult, "IVisualGestureBuilderDatabase::CreateVisualGestureBuilderDatabaseInstanceFromFile()[\"Swipe.gba\"]: " + to_string(hResult)) != 0) {
 		return -1;
@@ -288,9 +300,9 @@ int kinectSensor(chat_client & _c) {
 		return -1;
 	}
 	std::wcout << "[INFO] gesture name: " << g_name << endl;
+	SafeRelease(vgb_database);
 
 	// multiple gestures
-	SafeRelease(vgb_database);
 	hResult = CreateVisualGestureBuilderDatabaseInstanceFromFile(L"SampleDatabase.gbd", &vgb_database);
 	if (checkResult(hResult, "IVisualGestureBuilderDatabase::CreateVisualGestureBuilderDatabaseInstanceFromFile()[\"SampleDatabase.gbd\"]: " + to_string(hResult)) != 0) {
 		return -1;
@@ -357,6 +369,7 @@ int kinectSensor(chat_client & _c) {
 		}
 	}
 
+	// forever loop, activation maybe a better choice
 	while (1){
 		// Frame
 		//frameCount++;
@@ -370,13 +383,18 @@ int kinectSensor(chat_client & _c) {
 		hResult = pColorReader->AcquireLatestFrame(&pColorFrame);
 		//printf("ColorFrame: %16x\n", pColorFrame);
 		if (checkResult(hResult, "IColorFrameReader::AcquireLatestFrame()", false) != 0) {
-			SafeRelease(pColorFrame);
-			continue;
+			/*
+			* Be sure you release the color frame whenever you're done 
+			* ( with myColorFrame.Release() )! 
+			* If the color frame you point to has data, 
+			* it will return E_PENDING until it's cleared, 
+			* which confused me for quite a bit.
+			*/
+			goto RELEASE_FRAMES;
 		}
 		hResult = pColorFrame->get_RawColorImageFormat(&imageFormat);
 		if (checkResult(hResult, "IColorFrame::get_RawColorImageFormat()", false) != 0) {
-			SafeRelease(pColorFrame);
-			continue;
+			goto RELEASE_FRAMES;
 		}
 
 		if (imageFormat == ColorImageFormat_Bgra) {
@@ -386,8 +404,7 @@ int kinectSensor(chat_client & _c) {
 			//hResult = pColorFrame->AccessRawUnderlyingBuffer(&bufferColorSize, reinterpret_cast<BYTE**>(&bufferColorMat.data));
 			hResult = pColorFrame->CopyConvertedFrameDataToArray(bufferColorSize, reinterpret_cast<BYTE *>(pColorRGBX), ColorImageFormat_Bgra);
 			if (checkResult(hResult, "IColorFrame::CopyConvertedFrameDataToArray()", false) != 0) {
-				SafeRelease(pColorFrame);
-				continue;
+				goto RELEASE_FRAMES;
 			}
 			else {
 				colorMat = cv::Mat(color_height, color_width, CV_8UC4, pColorRGBX);
@@ -405,7 +422,7 @@ int kinectSensor(chat_client & _c) {
 		if (checkResult(hResult, "IDepthFrameReader::AcquireLatestFrame()", false) == 0) {
 			hResult = pDepthFrame->AccessUnderlyingBuffer(&bufferDepthSize, reinterpret_cast<UINT16**>(&bufferDepthMat.data));
 			if (checkResult(hResult, "IDepthFrame::AccessUnderlyingBuffer()", false) != 0) {
-				continue;
+				goto RELEASE_FRAMES;
 			}
 			// for visualization and normal 
 			/*visualMat = cv::Mat(depth_height, depth_width, CV_8UC3);
@@ -461,13 +478,17 @@ int kinectSensor(chat_client & _c) {
 					for (int biu = 0; biu < 3; biu++) {//#
 						c[biu] /= t_cnt;
 					} // regularization for three channel
+
 					normalMat.at<cv::Vec3b>(y, x) = c;
 				} // for x
 			} // for y
 			imshow("Visual", visualMat);
 			imshow("Normal", normalMat);*/
 
-			// for mapping, from depth to co/salute.gbdlor
+			bufferDepthMat.convertTo(depthMat, CV_8U, 255.0f / 4500.0f, .0f); // -255.0f / 4500.0f, 255.0f); // 
+			cv::imshow("Depth", depthMat);
+
+			// for mapping, from depth to color
 			hResult = mapper->MapDepthFrameToColorSpace(depth_height * depth_width, (UINT16 *)bufferDepthMat.data, depth_height * depth_width, spacePt);
 			if (checkResult(hResult, "ICoordinateMapper::MapDepthFrameToColorSpace()", false) == 0) {
 				if (has_color) {
@@ -488,14 +509,35 @@ int kinectSensor(chat_client & _c) {
 				} // has_color
 			}
 			else {
-				continue;
+				goto RELEASE_FRAMES;
 			}
 		}
 		else {
-			// ignore failure
-			SafeRelease(pDepthFrame);
-			// continue;
+			goto RELEASE_FRAMES;
 		}
+
+		// background and foreground
+		hResult = pBodyIndexReader->AcquireLatestFrame(&pBodyIndexFrame);
+		if (checkResult(hResult, "IBodyIndexFrameReader::AcquireLatestFrame()", false) != 0) {
+			goto RELEASE_FRAMES;
+		}
+
+		hResult = pBodyIndexFrame->AccessUnderlyingBuffer(&bufferCutSize, reinterpret_cast<UCHAR**>(&bufferCutMat.data));
+		if (checkResult(hResult, "IBodyIndexFrame::AccessUnderlyingBuffer()", false) != 0) {
+			goto RELEASE_FRAMES;
+		}
+		for (int y = 0; y < depth_height; y++) {
+			for (int x = 0; x < depth_width; x++) {
+				uchar cut = bufferCutMat.at<UCHAR>(y, x);
+				if (0 <= cut && cut < 6) {
+					cutMat.at<Vec3b>(y, x) = Vec3b(255, 255, 255);
+				}
+				else {
+					cutMat.at<Vec3b>(y, x) = Vec3b(0.);
+				}
+			}
+		}
+		cv::imshow("Cut", cutMat);
 
 		// get body joints
 		hResult = pBodyReader->AcquireLatestFrame(&pBodyFrame);
@@ -589,23 +631,20 @@ int kinectSensor(chat_client & _c) {
 					} // safe release
 					delete[] pBodies;
 
-					bufferDepthMat.convertTo(depthMat, CV_8U, 255.0f / 4500.0f, .0f); //-255.0f / 4500.0f, 255.0f);
-					cv::imshow("Depth", depthMat);
 					cv::Mat colorResizedMat = cv::Mat(colorMat.rows / 2, colorMat.cols / 2, colorMat.type());
 					cv::resize(colorMat, colorResizedMat, cv::Size(colorResizedMat.cols, colorResizedMat.rows));
 					cv::imshow("Color", colorResizedMat);
-				}
+				} // GetAndRefreshBodyData
 				else {
-					continue;
+					goto RELEASE_FRAMES;
 				}
-			}
+			} // get_BodyCount
 			else {
-				continue;
+				goto RELEASE_FRAMES;
 			}
-		}
+		} // AcquireLatestFrame
 		else {
-			// do nothing
-			//continue;
+			goto RELEASE_FRAMES;
 		}
 
 		// detection
@@ -693,8 +732,8 @@ int kinectSensor(chat_client & _c) {
 									msg.encode_header();
 									cout << multi_msg << endl;
 									_c.write(msg);
-								}
-							}
+								} // get_Detected
+							} // get_DiscreteGestureResult
 							SafeRelease(discrete_result);
 						}
 						else if (g_type == GestureType_Continuous) {
@@ -708,19 +747,20 @@ int kinectSensor(chat_client & _c) {
 									hResult = multiple_gestures[g]->get_Name(1000, gesture_name);
 									if (checkResult(hResult, "IGesture::get_Name()") != 0) {
 										// nothing
-									}
+									} // get_ContinuousGestureResult
 									// std::wcout << gesture_name << L": " << std::endl;
 									// std::cout << std::to_string(progress) << std::endl;
 								}
 							}
 							SafeRelease(continuous_result);
-						}
-					}
-				}
-			}
+						} // continuous gesture
+					} // for multiple gestures
+				} // get_IsTrackingIdValid
+			} // CalculateAndAcquireLatestFrame
 			SafeRelease(vgb_frame);
-		}
+		} // for body count
 
+	RELEASE_FRAMES:
 		SafeRelease(pDepthFrame);
 		SafeRelease(pColorFrame);
 		SafeRelease(pBodyFrame);
@@ -729,7 +769,7 @@ int kinectSensor(chat_client & _c) {
 		if (cv::waitKey(30) == VK_ESCAPE){
 			break;
 		}
-	}
+	} // while 1
 
 	// clean junk
 
