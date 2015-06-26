@@ -8,8 +8,6 @@
 
 #include <opencv2/opencv.hpp>
 
-#include <comdef.h>
-
 #include "chat.hpp"
 using namespace std;
 using namespace cv;
@@ -25,21 +23,75 @@ void printJointInfo(const Joint & jt, const JointOrientation & jt_or, const stri
 		", " << jt_or.Orientation.z << ")\n";
 }
 
-int checkResult(const HRESULT & hr, const string & prompt, bool display = true) {
+inline int checkResult(const HRESULT & hr, const string & prompt, bool display = true) {
 	if (FAILED(hr)) {
-		if (display) {
+		if (true || display) {
 			_com_error err(hr);
 			LPCTSTR errMsg = err.ErrorMessage();
-			std::wcerr << "[ERROR] <" << errMsg << "> ";
-			std::cerr << prompt << '\n';
+			std::wcerr << "[ERROR] <" << errMsg << "> " << sConvToW(prompt) << '\n';
 		}
 		return -1;
 	}
 	else {
-		/*if (display) {
+		if (false && display) {
 			std::cout << "[SUCCESS] " << prompt << '\n';
-		}*/
+		}
 		return 0;
+	}
+}
+
+void detect(deque <bool> & result,
+	const deque <cv::Mat> & depthQ, const deque <IBody **> & bodyQ,
+	const deque <clock_t> & timestampQ, int window_size, cv::Mat & curveMap) {
+
+	HRESULT hResult = S_OK;
+
+	for (auto pBodies : bodyQ) {
+		bool detected = false;
+		for (uint i = 0; i < BODY_COUNT; i++) {
+			BOOLEAN is_tracked = false;
+			hResult = pBodies[i]->get_IsTracked(&is_tracked);
+
+			if (checkResult(hResult, "IBody::get_IsTracked()") == 0) {
+				// nothing
+			}
+
+			if (is_tracked) {
+				// get joint position
+				Joint pJoints[JointType::JointType_Count];
+				hResult = pBodies[i]->GetJoints(JointType::JointType_Count, pJoints);
+				if (checkResult(hResult, "IBody::GetJoints()") == 0) {
+					// nothing
+				}
+				// get joint orientation
+				JointOrientation pOrientations[JointType::JointType_Count];
+				hResult = pBodies[i]->GetJointOrientations(JointType::JointType_Count, pOrientations);
+				if (checkResult(hResult, "IBody::GetJointOrientations()") == 0) {
+					// nothing
+				}
+
+				// printJointInfo(pJoints[JointType::JointType_HandLeft], pOrientations[JointType::JointType_HandLeft], "Left Hand");
+				// printJointInfo(pJoints[JointType::JointType_HandRight], pOrientations[JointType::JointType_HandRight], "Right Hand");
+				if (pJoints[JointType::JointType_HandRight].Position.Y >
+					pJoints[JointType::JointType_Head].Position.Y || 
+					pJoints[JointType::JointType_HandLeft].Position.Y >
+					pJoints[JointType::JointType_Head].Position.Y) {
+					// std::cout << "Right Hand Above Left Hand" << std::endl;
+					detected = true;
+				}
+				else {
+					// std::cout << "Right Hand Below Left Hand" << std::endl;
+				}
+				//if(pJoints[JointType::JointType_HandRight].Position.Z > ;
+				/*for (int j = 0; j < JointType::JointType_Count; j++) {
+					const Joint& jt = pJoints[j];
+					const JointOrientation& jt_or = pOrientations[j];
+					} // for joints*/
+
+			} // is_tracked
+
+		} // for i in bodies
+		result.push_back(detected);
 	}
 }
 
@@ -189,9 +241,10 @@ int kinectSensor(chat_client & _c) {
 	cv::namedWindow("Depth");
 	cv::namedWindow("Color");
 	// cv::namedWindow("Visual");
-	cv::namedWindow("Mapper");
+	// cv::namedWindow("Mapper");
 	// cv::namedWindow("Normal");
 	cv::namedWindow("Cut");
+	cv::namedWindow("Curve");
 
 	int frameCount = 0;
 	DWORD threadID = 0;
@@ -369,6 +422,13 @@ int kinectSensor(chat_client & _c) {
 		}
 	}
 
+	// store time-window data, including frames of depth, body, (or color?), result of detection
+	deque <cv::Mat> depthQ;
+	deque <IBody **> bodyQ;
+	deque <clock_t> timestampQ;
+	deque <bool> result, result_comp;
+	int max_q_size = 30;
+
 	// forever loop, activation maybe a better choice
 	while (1){
 		// Frame
@@ -424,6 +484,16 @@ int kinectSensor(chat_client & _c) {
 			if (checkResult(hResult, "IDepthFrame::AccessUnderlyingBuffer()", false) != 0) {
 				goto RELEASE_FRAMES;
 			}
+			// store depth data in queue
+			// clock_t start = clock();
+			cv::Mat depthCopy = bufferDepthMat.clone();
+			depthQ.push_back(depthCopy);
+			if (depthQ.size() > max_q_size) {
+				depthQ.pop_front();
+			}
+			// clock_t end = clock();
+			// std::cout << "[INFO] " << (end - start) * 1. << " ms" << endl;
+
 			// for visualization and normal 
 			/*visualMat = cv::Mat(depth_height, depth_width, CV_8UC3);
 			normalMat = cv::Mat(depth_height, depth_width, CV_8UC3);
@@ -489,7 +559,7 @@ int kinectSensor(chat_client & _c) {
 			cv::imshow("Depth", depthMat);
 
 			// for mapping, from depth to color
-			hResult = mapper->MapDepthFrameToColorSpace(depth_height * depth_width, (UINT16 *)bufferDepthMat.data, depth_height * depth_width, spacePt);
+			/*hResult = mapper->MapDepthFrameToColorSpace(depth_height * depth_width, (UINT16 *)bufferDepthMat.data, depth_height * depth_width, spacePt);
 			if (checkResult(hResult, "ICoordinateMapper::MapDepthFrameToColorSpace()", false) == 0) {
 				if (has_color) {
 					mapperMat = cv::Mat(depth_height, depth_width, CV_8UC3);
@@ -510,7 +580,7 @@ int kinectSensor(chat_client & _c) {
 			}
 			else {
 				goto RELEASE_FRAMES;
-			}
+			}*/
 		}
 		else {
 			goto RELEASE_FRAMES;
@@ -551,6 +621,27 @@ int kinectSensor(chat_client & _c) {
 					pBodies[i] = nullptr;
 				}
 				hResult = pBodyFrame->GetAndRefreshBodyData(body_count, pBodies);
+
+				// store body data in queue
+				bodyQ.push_back(pBodies);
+				if (bodyQ.size() > max_q_size) {
+					IBody ** toRelease = bodyQ.front();
+					for (int i = 0; i < BODY_COUNT; i++) {
+						SafeRelease(toRelease[i]);
+					}
+					delete [] toRelease;
+					bodyQ.pop_front();
+				}
+				
+				// store timestamp in queue
+				timestampQ.push_back(clock());
+				if (timestampQ.size() > max_q_size) {
+					timestampQ.pop_front();
+				}
+				std::cout << "[INFO] depth: " << depthQ.size() << " body: " << bodyQ.size()
+					<< " result1: " << result.size() << " result2: " << result_comp.size() 
+					<< " timestamp: " << timestampQ.size() << " first stamp was: " << (clock() - timestampQ.front()) << " ms ago" << endl;
+
 				if (checkResult(hResult, "IBodyFrame::GetAndRefreshBodyData()") == 0) {
 					for (uint i = 0; i < BODY_COUNT; i++) {
 						BOOLEAN is_tracked = false;
@@ -559,6 +650,7 @@ int kinectSensor(chat_client & _c) {
 						if (checkResult(hResult, "IBody::get_IsTracked()") == 0) {
 							// nothing
 						}
+
 						if (is_tracked) {
 							// get joint position
 							Joint pJoints[JointType::JointType_Count];
@@ -626,10 +718,10 @@ int kinectSensor(chat_client & _c) {
 
 					} // for i in bodies
 
-					for (int i = 0; i < body_count; i++) {
+					/*for (int i = 0; i < body_count; i++) {
 						SafeRelease(pBodies[i]);
 					} // safe release
-					delete[] pBodies;
+					delete[] pBodies;*/
 
 					cv::Mat colorResizedMat = cv::Mat(colorMat.rows / 2, colorMat.cols / 2, colorMat.type());
 					cv::resize(colorMat, colorResizedMat, cv::Size(colorResizedMat.cols, colorResizedMat.rows));
@@ -648,6 +740,7 @@ int kinectSensor(chat_client & _c) {
 		}
 
 		// detection
+		bool head_detected = false;
 		for (uint i = 0; i < BODY_COUNT; i++) {
 			IVisualGestureBuilderFrame* vgb_frame = nullptr;
 			hResult = vgb_reader[i]->CalculateAndAcquireLatestFrame(&vgb_frame);
@@ -667,12 +760,15 @@ int kinectSensor(chat_client & _c) {
 						hResult = discrete_result->get_Detected(&bDetected);
 						if (checkResult(hResult, "IDiscreteGestureResult::get_Detected()") == 0
 							&& bDetected) {
+							head_detected = true;
 							std::cout << "[INFO] hand over head Gesture detected" << std::endl;
 							chat_message msg;
 							string head_msg = "[kinect] button";
 							msg.body_length(head_msg.size());
 							std::memcpy(msg.body(), head_msg.c_str(), msg.body_length());
-							cout << head_msg << endl;
+							msg.body()[msg.body_length()] = 0;
+							// cout << head_msg << endl;
+							cout << msg.body() << endl;
 							msg.encode_header();
 							_c.write(msg);
 						}
@@ -712,11 +808,12 @@ int kinectSensor(chat_client & _c) {
 									if (checkResult(hResult, "IGesture::get_Name()") != 0) {
 										// nothing
 									}
-									std::wcout << L"[INFO] " << gesture_name << std::endl;
+									std::wcout << L"[INFO] " << gesture_name << L'\n';
 									chat_message msg;
-									wstring w_msg = gesture_name;
-									std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-									std::string s_msg = converter.to_bytes(w_msg);
+									// wstring w_msg = gesture_name;
+									// std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+									// std::string s_msg = converter.to_bytes(w_msg);
+									std::string s_msg = wConvToS(gesture_name);
 									string multi_msg = "[kinect] ";
 									if (s_msg == "Steer_Left") {
 										multi_msg += "left";
@@ -729,8 +826,10 @@ int kinectSensor(chat_client & _c) {
 									}
 									msg.body_length(multi_msg.size());
 									std::memcpy(msg.body(), multi_msg.c_str(), msg.body_length());
+									msg.body()[msg.body_length()] = 0;
 									msg.encode_header();
-									cout << multi_msg << endl;
+									// cout << multi_msg << endl;
+									cout << msg.body() << endl;
 									_c.write(msg);
 								} // get_Detected
 							} // get_DiscreteGestureResult
@@ -759,6 +858,93 @@ int kinectSensor(chat_client & _c) {
 			} // CalculateAndAcquireLatestFrame
 			SafeRelease(vgb_frame);
 		} // for body count
+		result_comp.push_back(head_detected);
+		if (result_comp.size() > max_q_size) {
+			result_comp.pop_front();
+		}
+
+		// new detection
+		{
+			// own part
+			int single_width = 20, y_bar = 120, single_height = 4,
+				left_offset_1 = 30, left_offset_2 = 180, up_offset = 25,
+				line_offset_1 = 5, line_offset_2 = 155, line_len = 23, line_dis = 20;
+			cv::Mat curveMap(y_bar * single_height, max((int)bodyQ.size(), max_q_size) * single_width, CV_8UC3);
+			curveMap.setTo(0);
+
+			cv::Point text_corner;
+			text_corner.x = left_offset_1;
+			text_corner.y = up_offset;
+			putText(curveMap, "Our Method", text_corner,
+				cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0., 0., 255.), 1);
+
+			line(curveMap, cv::Point(line_offset_1, line_dis),
+				cv::Point(line_offset_1+line_len, line_dis), cv::Scalar(0., 0., 255.), 2);
+
+			text_corner.x = left_offset_2;
+			text_corner.y = up_offset;
+			putText(curveMap, "Microsoft Method", text_corner,
+				cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0., 255., 255.), 1);
+
+			line(curveMap, cv::Point(line_offset_2, line_dis),
+				cv::Point(line_offset_2+line_len, line_dis), cv::Scalar(0., 255., 255.), 2);
+
+			result.clear();
+			detect(result, depthQ, bodyQ, timestampQ, 0, curveMap);
+			cv::Point to_draw, drawn;
+			drawn.x = drawn.y = 0;
+			int id = 0;
+			for (auto detected : result) {
+				to_draw.x = id * single_width + 10;
+				if (detected) {
+					to_draw.y = 15 * single_height + single_height;
+				}
+				else {
+					to_draw.y = 115 * single_height + single_height;
+				}
+				int radius = 4;
+				circle(curveMap, to_draw, radius, cv::Scalar(0., 0., 255.), -1); // filled
+				if (drawn.x != 0 && drawn.y != 0) {
+					line(curveMap, drawn, to_draw, cv::Scalar(0., 0., 255.), 2);
+				}
+				drawn = to_draw;
+				id++;
+			}
+
+			// microsoft part
+
+			drawn.x = drawn.y = 0;
+			id = 0;
+			for (auto detected : result_comp) {
+				to_draw.x = id * single_width + 10;
+				if (detected) {
+					to_draw.y = 15 * single_height + single_height;
+				}
+				else {
+					to_draw.y = 115 * single_height + single_height;
+				}
+				int radius = 4;
+				circle(curveMap, to_draw, radius, cv::Scalar(0., 255., 255.), -1); // filled
+				if (drawn.x != 0 && drawn.y != 0) {
+					line(curveMap, drawn, to_draw, cv::Scalar(0., 255., 255.), 2);
+				}
+				drawn = to_draw;
+				id++;
+			}
+			
+			imshow("Curve", curveMap);
+		}
+
+		// for debugging
+		/*if (cv::waitKey(30) == 'a'){
+			int id = 0;
+			for (auto frame : depthQ) {
+				frame.convertTo(depthMat, CV_8U, 255.0f / 4500.0f, .0f); // -255.0f / 4500.0f, 255.0f); // 
+				imwrite(to_string(id) + ".png", depthMat);
+				id++;
+			}
+			break;
+		}*/
 
 	RELEASE_FRAMES:
 		SafeRelease(pDepthFrame);
