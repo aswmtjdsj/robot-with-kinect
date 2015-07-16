@@ -488,7 +488,7 @@ int kinectSensor(chat_client & _c) {
 			// clock_t start = clock();
 			cv::Mat depthCopy = bufferDepthMat.clone();
 			depthQ.push_back(depthCopy);
-			if (depthQ.size() > max_q_size) {
+			if (depthQ.size() > (uint)max_q_size) {
 				depthQ.pop_front();
 			}
 			// clock_t end = clock();
