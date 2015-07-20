@@ -83,6 +83,7 @@ private:
 	string pSkeletonsFileName[BODY_COUNT];
 	fstream pSkeletonsFile[BODY_COUNT];
 	uint pSkeletonFrameCount[BODY_COUNT];
+	vector < vector<JointType> > pSkeletonConnection;
 
 	// for frame recording
 	int pColorFrameCount, pDepthFrameCount, pBodyFrameCount, pBodyIndexFrameCount;
@@ -151,7 +152,7 @@ public:
 		pDepthMin(0), pDepthMax(0),
 		pUseColor(true), pUseDepth(true),
 		pUseBody(false), pUseBodyIndex(false), pUseFace(false),
-		pUseBodyFaceIntegration(true), pUseHDFace(true),
+		pUseBodyFaceIntegration(true), pUseHDFace(false),
 		pColorRGBX(nullptr),
 		pImageFormat(ColorImageFormat_None),
 		colorSpacePts(nullptr),
@@ -171,7 +172,6 @@ public:
 		pOwnMethodResults.clear();
 		pLibraryMethodResults.clear();
 
-
 		// std::cout << pBodyFrameFileName << std::endl;
 		if (handle_training_data == 0) {
 			pDataDirectory = "./data/Integration/";
@@ -188,6 +188,60 @@ public:
 				pSkeletonsFile[count].close();
 			}
 		}
+		// skeleton connection map
+		pSkeletonConnection.resize(JointType::JointType_Count);
+		pSkeletonConnection[JointType::JointType_SpineBase] =
+		{ JointType::JointType_SpineMid, JointType::JointType_HipLeft, JointType::JointType_HipRight }; // # 0
+		pSkeletonConnection[JointType::JointType_SpineMid] =
+		{ JointType::JointType_SpineShoulder, JointType::JointType_SpineBase }; // # 1
+		pSkeletonConnection[JointType::JointType_Neck] =
+		{ JointType::JointType_Head, JointType::JointType_SpineShoulder }; // # 2
+		pSkeletonConnection[JointType::JointType_Head] =
+		{ JointType::JointType_Neck }; // # 3
+		pSkeletonConnection[JointType::JointType_ShoulderLeft] =
+		{ JointType::JointType_SpineShoulder, JointType::JointType_ElbowLeft }; // # 4
+		pSkeletonConnection[JointType::JointType_ElbowLeft] =
+		{ JointType::JointType_ShoulderLeft, JointType::JointType_WristLeft }; // # 5
+		pSkeletonConnection[JointType::JointType_WristLeft] =
+		{ JointType::JointType_ElbowLeft, JointType::JointType_HandLeft, JointType::JointType_ThumbLeft }; // # 6
+		pSkeletonConnection[JointType::JointType_HandLeft] =
+		{ JointType::JointType_WristLeft, JointType::JointType_HandTipLeft }; // # 7
+		pSkeletonConnection[JointType::JointType_ShoulderRight] =
+		{ JointType::JointType_SpineShoulder, JointType::JointType_ElbowRight }; // # 8
+		pSkeletonConnection[JointType::JointType_ElbowRight] =
+		{ JointType::JointType_ShoulderRight, JointType::JointType_WristRight }; // # 9
+		pSkeletonConnection[JointType::JointType_WristRight] =
+		{ JointType::JointType_ElbowRight, JointType::JointType_HandRight, JointType::JointType_ThumbRight }; // # 10
+		pSkeletonConnection[JointType::JointType_HandRight] =
+		{ JointType::JointType_WristRight, JointType::JointType_HandTipRight }; // # 11
+		pSkeletonConnection[JointType::JointType_HipLeft] =
+		{ JointType::JointType_SpineBase, JointType::JointType_KneeLeft }; // # 12
+		pSkeletonConnection[JointType::JointType_KneeLeft] =
+		{ JointType::JointType_HipLeft, JointType::JointType_AnkleLeft }; // # 13
+		pSkeletonConnection[JointType::JointType_AnkleLeft] =
+		{ JointType::JointType_KneeLeft, JointType::JointType_FootLeft }; // # 14
+		pSkeletonConnection[JointType::JointType_FootLeft] =
+		{ JointType::JointType_AnkleLeft }; // # 15
+		pSkeletonConnection[JointType::JointType_HipRight] =
+		{ JointType::JointType_SpineBase, JointType::JointType_KneeRight }; // # 16
+		pSkeletonConnection[JointType::JointType_KneeRight] =
+		{ JointType::JointType_HipRight, JointType::JointType_AnkleRight }; // # 17
+		pSkeletonConnection[JointType::JointType_AnkleRight] =
+		{ JointType::JointType_KneeRight, JointType::JointType_FootRight }; // # 18
+		pSkeletonConnection[JointType::JointType_FootRight] =
+		{ JointType::JointType_AnkleRight }; // # 19
+		pSkeletonConnection[JointType::JointType_SpineShoulder] =
+		{ JointType::JointType_Neck, JointType::JointType_ShoulderLeft,
+		JointType::JointType_ShoulderRight, JointType::JointType_SpineMid }; // # 20
+		pSkeletonConnection[JointType::JointType_HandTipLeft] =
+		{ JointType::JointType_HandLeft }; // # 21
+		pSkeletonConnection[JointType::JointType_ThumbLeft] =
+		{ JointType::JointType_WristLeft }; // # 22
+		pSkeletonConnection[JointType::JointType_HandTipRight] =
+		{ JointType::JointType_HandRight }; // # 23
+		pSkeletonConnection[JointType::JointType_ThumbRight] =
+		{ JointType::JointType_WristRight }; // # 24
+
 		// for face frame
 		for (uint count = 0; count < BODY_COUNT; count++) {
 			pFaceSource[count] = nullptr;
@@ -201,7 +255,6 @@ public:
 				pFaceRecordFile[count].close();
 			}
 		}
-
 		// for hd face
 		if (pUseHDFace) {
 			for (uint count = 0; count < BODY_COUNT; count++) {
@@ -1246,27 +1299,37 @@ public:
 							pSkeletonFrameCount[count]++;
 							// recording part done
 							// draw joints on depth map
-							for (int j = 0; j < JointType::JointType_Count; j++) {
-								const Joint& tJoint = tJoints[j];
-								const JointOrientation& tOrientation = tOrientations[j];
+							CameraSpacePoint tCameraPts[JointType::JointType_Count];
+							DepthSpacePoint tDepthPts[JointType::JointType_Count];
+							ColorSpacePoint tColorPts[JointType::JointType_Count];
+							for (uint pid = 0; pid < JointType::JointType_Count; pid++) {
+								tCameraPts[pid] = tJoints[pid].Position;
+							}
+							// convert from camera space to depth space
+							if (checkResult(
+								pMapper->MapCameraPointsToDepthSpace(
+								JointType::JointType_Count, tCameraPts, JointType::JointType_Count, tDepthPts),
+								"ICoordinateMapper::MapCameraPointsToDepthSpace()") == 0) {
+								// nothing
+							}
+							if (checkResult(
+								pMapper->MapCameraPointsToColorSpace(
+								JointType::JointType_Count, tCameraPts, JointType::JointType_Count, tColorPts),
+								"ICoordinateMapper::MapCameraPointsToColorSpace()") == 0) {
+								// nothing
+							}
+							// draw
+							std::set < std::pair<uint, uint> > tConnections;
+							for (uint j = 0; j < JointType::JointType_Count; j++) {
 								// draw all joints
-								if (tJoint.TrackingState != TrackingState_NotTracked) {
+								if (tJoints[j].TrackingState != TrackingState_NotTracked) {
 									// re-mapping the joint position
-									CameraSpacePoint tCameraPt = tJoint.Position;
-									DepthSpacePoint tDepthPt;
-									int tNumPts = 1;
-									if (checkResult(
-										pMapper->MapCameraPointsToDepthSpace(
-										tNumPts, &tCameraPt, tNumPts, &tDepthPt),
-										"ICoordinateMapper::MapCameraPointsToColorSpace()") == 0) {
-										// nothing
-									}
-									int tX = floor(tDepthPt.X), tY = floor(tDepthPt.Y);
+									int tX = floor(tDepthPts[j].X), tY = floor(tDepthPts[j].Y);
 									if (tX >= 0 && tX < pDepthWidth
 										&& tY >= 0 && tY < pDepthHeight) {
 										cv::Point tToDraw(tX, tY);
 										int tRadius = 5;
-										if (tJoint.TrackingState == TrackingState_Inferred) { // filled circle indicate inferred
+										if (tJoints[j].TrackingState == TrackingState_Inferred) { // filled circle indicate inferred
 											circle(pDepthMat, tToDraw, tRadius, cv::Scalar(0, 0, 255));
 										}
 										else { // filled circle
@@ -1279,6 +1342,36 @@ public:
 											cv::FONT_HERSHEY_SIMPLEX, 0.5,
 											cv::Scalar(0, 255, 255), 1);
 									} // depth point within boundary
+
+									// color drawing
+									tX = floor(tColorPts[j].X), tY = floor(tColorPts[j].Y);
+									if (tX >= 0 && tX < pColorWidth
+										&& tY >= 0 && tY < pColorHeight) {
+										cv::Point tToDraw(tX, tY);
+										int tRadius = 10;
+										if (tJoints[j].TrackingState == TrackingState_Inferred) { // filled circle indicate inferred
+											cv::circle(pColorMat, tToDraw, tRadius, cv::Scalar(255, 0, 255));
+										}
+										else { // filled circle
+											cv::circle(pColorMat, tToDraw, tRadius, cv::Scalar(255, 0, 255), -1);
+										}
+										cv::Point tTextCorner = tToDraw;
+										tTextCorner.x += tRadius;
+										tTextCorner.y += tRadius;
+										putText(pColorMat, to_string(j), tTextCorner,
+											cv::FONT_HERSHEY_SIMPLEX, 1,
+											cv::Scalar(0, 255, 0), 2);
+										for (uint c = 0; c < pSkeletonConnection[j].size(); c++) {
+											uint a = j, b = pSkeletonConnection[j][c];
+											if (tConnections.find(std::make_pair(min(a, b), max(a, b))) == tConnections.end()
+												&& 0 <= tColorPts[b].X && tColorPts[b].X < pColorWidth
+												&& 0 <= tColorPts[b].Y && tColorPts[b].Y < pColorHeight) {
+												cv::line(pColorMat, tToDraw, cv::Point(floor(tColorPts[b].X), floor(tColorPts[b].Y)),
+													cv::Scalar(255, 0, 255), 2);
+												tConnections.insert(std::make_pair(min(a, b), max(a, b)));
+											}
+										}
+									} // color point within boundary
 								} // if tracking
 							} // for joints
 						} // if body tracked
