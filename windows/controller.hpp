@@ -131,6 +131,10 @@ private:
 	IFaceAlignment* pFaceAlignment[BODY_COUNT];
 	IFaceModel* pFaceModel[BODY_COUNT];
 	std::vector<std::vector<float>> pDeformations;
+	bool pHDFaceTrackingIdLost[BODY_COUNT];
+	UINT32 pFaceVertexCount, pFaceTriangleCount;
+	vector <UINT32> pFaceTriangles;
+	bool pFaceModelSaved[BODY_COUNT];
 	// std::shared_ptr < > ;
 public:
 
@@ -157,6 +161,8 @@ public:
 		pBodyFrameCount(0), pBodyIndexFrameCount(0),
 		error_debug(false),
 		visual_debug(true),
+		pFaceVertexCount(0),
+		pFaceTriangleCount(0),
 		handle_training_data(0) {
 
 		pDepthQ.clear();
@@ -194,6 +200,23 @@ public:
 			if (pFaceRecordFile[count].is_open()) {
 				pFaceRecordFile[count].close();
 			}
+		}
+
+		// for hd face
+		if (pUseHDFace) {
+			for (uint count = 0; count < BODY_COUNT; count++) {
+				pHDFaceSource[count] = nullptr;
+				pHDFaceReader[count] = nullptr;
+				pFaceModelBuilder[count] = nullptr;
+				pFaceModelProduced[count] = false;
+				pFaceAlignment[count] = nullptr;
+				pFaceModel[count] = nullptr;
+				pFaceModelSaved[count] = false;
+			}
+			// init deformation array
+			pDeformations.resize(BODY_COUNT,
+				std::vector<float>(FaceShapeDeformations::FaceShapeDeformations_Count));
+			// should we do this using vector? or using smart pointer
 		}
 
 		// face properties
@@ -372,6 +395,7 @@ public:
 		pColorRGBX = new RGBQUAD[pColorWidth * pColorHeight];
 		pColorMat = cv::Mat(pColorHeight, pColorWidth, CV_8UC4);
 
+		std::cout << "[INFO] Color init done!\n";
 		return 0;
 	}
 
@@ -438,6 +462,7 @@ public:
 		// depth - color mapper
 		colorSpacePts = new ColorSpacePoint[pDepthHeight * pDepthWidth];
 
+		std::cout << "[INFO] Depth init done!\n";
 		return 0;
 	}
 
@@ -457,6 +482,7 @@ public:
 			return -1;
 		}
 
+		std::cout << "[INFO] Body init done!\n";
 		return 0;
 	}
 
@@ -475,7 +501,7 @@ public:
 			"IBodyIndexFrameReader::OpenReader()") != 0) {
 			return -1;
 		}
-
+		std::cout << "[INFO] Body Index init done!\n";
 		return 0;
 	}
 
@@ -493,16 +519,38 @@ public:
 				return -1;
 			}
 		}
+		std::cout << "[INFO] Face init done!\n";
 		return 0;
 	}
 
 	int HDFaceInit() {
-		// init deformation array
-		pDeformations.resize(BODY_COUNT,
-			std::vector<float>(FaceShapeDeformations::FaceShapeDeformations_Count));
-		// should we do this using vector? or using smart pointer
-
 		// HD face init
+		// get face model vertex count
+		if (checkResult(
+			GetFaceModelVertexCount(&pFaceVertexCount), // 1347
+			"GetFaceModelVertexCount()") != 0) {
+			return -1;
+		}
+		// face model mesh triangle index
+		if (checkResult(
+			GetFaceModelTriangleCount(&pFaceTriangleCount), // ?
+			"GetFaceModelTriangleCount()") != 0) {
+			return -1;
+		}
+		pFaceTriangles.resize(pFaceTriangleCount * 3);
+		if (checkResult(
+			GetFaceModelTriangles(pFaceTriangleCount * 3, 
+			&pFaceTriangles[0]),
+			"GetFaceModelTriangles()") != 0) {
+			return -1;
+		}
+		std::cout << "[INFO] HD Face vertex count: " << pFaceVertexCount \
+			<< " triangle count: " << pFaceTriangleCount << '\n';
+		/*for (uint idx = 0; idx < pFaceTriangleCount + 1; idx++) {
+			if (pFaceTriangles[idx] == 0) {
+				std::cout << idx << ' ' << pFaceTriangles[idx] << std::endl;
+			}
+		}*/
 		for (uint count = 0; count < BODY_COUNT; count++) {
 			// hd source
 			if (checkResult(
@@ -510,6 +558,7 @@ public:
 				"CreateHighDefinitionFaceFrameSource()") != 0) {
 				return -1;
 			}
+			// Initial tracking id is 0
 			// hd reader
 			if (checkResult(
 				pHDFaceSource[count]->OpenReader(&pHDFaceReader[count]),
@@ -542,6 +591,7 @@ public:
 				&pDeformations[count][0],
 				&pFaceModel[count]);
 		}
+		std::cout << "[INFO] HD Face init done!\n";
 		return 0;
 	}
 
@@ -874,9 +924,7 @@ public:
 									tDepthPt.Y = floor(tDepthPt.Y);
 									if (tDepthPt.X >= 0 && tDepthPt.X < pDepthWidth
 										&& tDepthPt.Y >= 0 && tDepthPt.Y < pDepthHeight) {
-										cv::Point tToDraw;
-										tToDraw.x = tDepthPt.X;
-										tToDraw.y = tDepthPt.Y;
+										cv::Point tToDraw(tDepthPt.X, tDepthPt.Y);
 										int tRadius = 5;
 										if (tJoint.TrackingState == TrackingState_Inferred) {
 											circle(pDepthMat, tToDraw, tRadius,
@@ -1135,7 +1183,6 @@ public:
 						}
 						// body[count] is tracked
 						if (tIsTracked) {
-
 							// Set TrackingID to detect face
 							UINT64 tTrackingId = _UI64_MAX;
 							if (checkResult(
@@ -1146,15 +1193,17 @@ public:
 							// this will initialize and allocate some memory
 							if (checkResult(
 								pFaceSource[count]->put_TrackingId(tTrackingId),
-								"IFaceFrameSource:put_TrackingId") != 0) {
+								"IFaceFrameSource:put_TrackingId()") != 0) {
 								// do nothing
 							}
 							if (pUseHDFace) {
 								if (checkResult(
 									pHDFaceSource[count]->put_TrackingId(tTrackingId),
-									"IFaceFrameSource:put_TrackingId") != 0) {
+									"IHighDefinitionFaceFrameSource:put_TrackingId()") != 0) {
 									// do nothing
 								}
+								// tracking
+								pHDFaceTrackingIdLost[count] = false;
 							}
 							// record skeleton data
 							// get joint position
@@ -1173,7 +1222,6 @@ public:
 								"IBody::GetJointOrientations()") == 0) {
 								// nothing
 							}
-
 							// recording part
 							if (!pSkeletonsFile[count].is_open()) {
 								// create new dir for integration of body and face
@@ -1196,7 +1244,7 @@ public:
 							}
 							pSkeletonsFile[count] << '\n';
 							pSkeletonFrameCount[count]++;
-							//
+							// recording part done
 							// draw joints on depth map
 							for (int j = 0; j < JointType::JointType_Count; j++) {
 								const Joint& tJoint = tJoints[j];
@@ -1213,22 +1261,16 @@ public:
 										"ICoordinateMapper::MapCameraPointsToColorSpace()") == 0) {
 										// nothing
 									}
-
-									int tX = floor(tDepthPt.X);
-									int tY = floor(tDepthPt.Y);
+									int tX = floor(tDepthPt.X), tY = floor(tDepthPt.Y);
 									if (tX >= 0 && tX < pDepthWidth
 										&& tY >= 0 && tY < pDepthHeight) {
-										cv::Point tToDraw;
-										tToDraw.x = tX;
-										tToDraw.y = tY;
+										cv::Point tToDraw(tX, tY);
 										int tRadius = 5;
-										if (tJoint.TrackingState == TrackingState_Inferred) {
-											circle(pDepthMat, tToDraw, tRadius,
-												cv::Scalar(0, 0, 255));
+										if (tJoint.TrackingState == TrackingState_Inferred) { // filled circle indicate inferred
+											circle(pDepthMat, tToDraw, tRadius, cv::Scalar(0, 0, 255));
 										}
-										else {
-											circle(pDepthMat, tToDraw, tRadius,
-												cv::Scalar(0, 0, 255), -1);
+										else { // filled circle
+											circle(pDepthMat, tToDraw, tRadius, cv::Scalar(0, 0, 255), -1);
 										}
 										cv::Point tTextCorner = tToDraw;
 										tTextCorner.x += tRadius;
@@ -1241,11 +1283,53 @@ public:
 							} // for joints
 						} // if body tracked
 						else {
-							// not tracked
+							// body not tracked
 							if (pSkeletonsFile[count].is_open()) {
 								pSkeletonsFileName[count] = "";
 								pSkeletonsFile[count].close();
 								pSkeletonFrameCount[count] = 0;
+							}
+
+							// if body is lost (previously tracked)
+							// then throw away hd face tracking information
+							// re-track
+							// here should be some garbage collection
+							if (pUseHDFace) {
+								UINT64 tPrevTrackingId = _UI64_MAX;
+								if (checkResult(
+									pHDFaceSource[count]->get_TrackingId(&tPrevTrackingId),
+									"IHighDefinitionFaceFrameSource:get_TrackingId()") != 0) {
+									// nothing
+								}
+								if (tPrevTrackingId != 0 && !pHDFaceTrackingIdLost[count]) {
+									// tracking id lost
+									// release tracking id
+									if (checkResult(
+										pHDFaceSource[count]->put_TrackingId(0),
+										"IHighDefinitionFaceFrameSource:put_TrackingId()") != 0) {
+										// do nothing
+									}
+									pHDFaceTrackingIdLost[count] = true;
+									std::cout << "[INFO] body " << count << ": lost tracking id, re-track" << std::endl;
+									// clear previous face model builder and create a new one 
+									SafeRelease(pFaceModelBuilder[count]);
+									SafeRelease(pFaceModel[count]);
+									pFaceModelProduced[count] = false;
+									// hd Face Model Builder
+									if (checkResult(
+										pHDFaceSource[count]->OpenModelBuilder(
+										FaceModelBuilderAttributes::FaceModelBuilderAttributes_None,
+										&pFaceModelBuilder[count]),
+										"IHighDefinitionFaceFrameSource:OpenModelBuilder()") != 0) {
+										// nothing
+									}
+									// begin collecting face model data
+									if (checkResult(
+										pFaceModelBuilder[count]->BeginFaceDataCollection(),
+										"IFaceModelBuilder:BeginFaceDataCollection()") != 0) {
+										// nothing
+									}
+								}
 							}
 						} // tIsTracked = false
 					} // for BODY_COUNT
@@ -1463,48 +1547,238 @@ public:
 					pHDFaceReader[count]->AcquireLatestFrame(&tHDFaceFrame),
 					"IHighDefinitionFaceFrameReader::AcquireLatestFrame()") != 0) {
 					tHDFaceOK = false;
-					goto RELEASE_HD_FACE_FRAME;
+					// goto RELEASE_HD_FACE_FRAME;
 				}
 				else {
-					// TODO
 					BOOLEAN tHDFaceTrackingIdValid = true, tHDFaceTracked = true;
 					// get tracking id valid or not
 					if (checkResult(
 						tHDFaceFrame->get_IsTrackingIdValid(&tHDFaceTrackingIdValid),
 						"IHighDefinitionFaceFrame:get_IsTrackingIdValid()") != 0) {
 						tHDFaceOK = false;
-						goto RELEASE_HD_FACE_FRAME;
+						// goto RELEASE_HD_FACE_FRAME;
+						// SafeRelease(tHDFaceFrame);
 					}
 					else {
-						// get HD face tracked or not
-						if (checkResult(
-							tHDFaceFrame->get_IsFaceTracked(&tHDFaceTracked),
-							"IHighDefinitionFaceFrame:get_IsFaceTracked()") != 0) {
-							tHDFaceOK = false;
-							goto RELEASE_HD_FACE_FRAME;
-						}
-						else {
-							// std::cout << "HD tracked: " << (int) tHDFaceTracked << std::endl;
-							if (tHDFaceTracked) {
-								// HD face tracked
-								// get HD face result
-								// IFaceModel
-								//tHDFaceFrame->get_FaceModel()
-								// CreateFaceModel()
+						if (tHDFaceTrackingIdValid) { // if valid
+							// get HD face tracked or not
+							// std::cout << "tracking id valid" << std::endl;
+							if (checkResult(
+								tHDFaceFrame->get_IsFaceTracked(&tHDFaceTracked),
+								"IHighDefinitionFaceFrame:get_IsFaceTracked()") != 0) {
+								tHDFaceOK = false;
+								// goto RELEASE_HD_FACE_FRAME;
+								// SafeRelease(tHDFaceFrame);
 							}
 							else {
-							} // HD face not tracked
-						} // get HD face tracked or not
+								if (tHDFaceTracked) { // HD face tracked
+									// std::cout << "tracked" << std::endl;
+									// get face alignment
+									if (checkResult(
+										tHDFaceFrame->GetAndRefreshFaceAlignmentResult(pFaceAlignment[count]),
+										"IHighDefinitionFaceFrame:GetAndRefreshFaceAlignmentResult()") != 0) {
+										tHDFaceOK = false;
+										// goto RELEASE_HD_FACE_FRAME;
+										// SafeRelease(tHDFaceFrame);
+									}
+									else {
+										// haven't built face model
+										if (!pFaceModelProduced[count]) {
+											FaceModelBuilderCollectionStatus tCollection;
+											// get collection status
+											if (checkResult(
+												pFaceModelBuilder[count]->
+												get_CollectionStatus(&tCollection),
+												"IFaceModelBuilder:get_CollectionStatus()")
+												!= 0) {
+												// nothing
+											}
+											// check face builder collection status complete or not
+											if (tCollection == \
+												FaceModelBuilderCollectionStatus::FaceModelBuilderCollectionStatus_Complete){
+												std::cout << "[INFO] Status : Complete" << std::endl;
+												cv::putText(pColorMat,
+													"Status : Complete",
+													cv::Point(50, 50),
+													cv::FONT_HERSHEY_SIMPLEX, 1.0f,
+													cv::Scalar(255, 0, 0), 2);
+												IFaceModelData* tFaceModelData = nullptr;
+												// get face data
+												if (checkResult(
+													pFaceModelBuilder[count]->GetFaceData(&tFaceModelData),
+													"IFaceModelBuilder:GetFaceData()") != 0) {
+													// tHDFaceOK = false;
+													// goto RELEASE_HD_FACE_FRAME;
+													// nothing
+												}
+												else {
+													// produce face model
+													SafeRelease(pFaceModel[count]);
+													if (checkResult(
+														tFaceModelData->ProduceFaceModel(&pFaceModel[count]),
+														"IFaceModelData:ProduceFaceModel()") != 0) {
+														// tHDFaceOK = false;
+														// goto RELEASE_HD_FACE_FRAME;
+														// nothing
+													}
+													else {
+														pFaceModelProduced[count] = true;
+													} // face model produced
+												}
+												SafeRelease(tFaceModelData);
+												SafeRelease(pFaceModelBuilder[count]);
+											}
+											else {
+												std::string tCollectionString = "";
+												// Collection Status
+												if ((tCollection & FaceModelBuilderCollectionStatus::FaceModelBuilderCollectionStatus_TiltedUpViewsNeeded) != 0){
+													tCollectionString += "Tilted Up ViewsFrames, ";
+												}
+												if ((tCollection & FaceModelBuilderCollectionStatus::FaceModelBuilderCollectionStatus_RightViewsNeeded) != 0){
+													tCollectionString += "Right ViewsFrames, ";
+												}
+												if ((tCollection & FaceModelBuilderCollectionStatus::FaceModelBuilderCollectionStatus_LeftViewsNeeded) != 0){
+													tCollectionString += "Left ViewsFrames, ";
+												}
+												if ((tCollection & FaceModelBuilderCollectionStatus::FaceModelBuilderCollectionStatus_FrontViewFramesNeeded) != 0){
+													tCollectionString += "Front ViewsFrames";
+												}
+												std::cout << "[INFO] Status: " << "More Frames Needed" << std::endl;
+												std::cout << "[INFO] Need: " << tCollectionString << std::endl;
+												cv::putText(pColorMat,
+													"Status: " + \
+													((tCollection & FaceModelBuilderCollectionStatus::FaceModelBuilderCollectionStatus_TiltedUpViewsNeeded) != 0) ? "More Frames Needed" : "",
+													cv::Point(50, 50),
+													cv::FONT_HERSHEY_SIMPLEX, 1.0f,
+													cv::Scalar(255, 0, 0), 2);
+												cv::putText(pColorMat,
+													"Need: " + tCollectionString,
+													cv::Point(50, 100),
+													cv::FONT_HERSHEY_SIMPLEX, 1.0f,
+													cv::Scalar(0, 255, 0), 2);
+
+												// capture status
+												FaceModelBuilderCaptureStatus tCapture;
+												if (checkResult(
+													pFaceModelBuilder[count]->get_CaptureStatus(&tCapture),
+													"IFaceModelBuilder:get_CaptureStatus()") != 0) {
+													// nothing
+												}
+												std::string tCaptureString = "";
+												switch (tCapture){
+												case FaceModelBuilderCaptureStatus::FaceModelBuilderCaptureStatus_OtherViewsNeeded:
+													tCaptureString = "Other Views Needed";
+													break;
+												case FaceModelBuilderCaptureStatus::FaceModelBuilderCaptureStatus_LostFaceTrack:
+													tCaptureString = "Face Track Lost";
+													break;
+												case FaceModelBuilderCaptureStatus::FaceModelBuilderCaptureStatus_FaceTooFar:
+													tCaptureString = "Face Too Far From Camera";
+													break;
+												case FaceModelBuilderCaptureStatus::FaceModelBuilderCaptureStatus_FaceTooNear:
+													tCaptureString = "Face Too Near To Camera";
+													break;
+												case FaceModelBuilderCaptureStatus::FaceModelBuilderCaptureStatus_MovingTooFast:
+													tCaptureString = "(Face) Moving Too Fast";
+													break;
+												case FaceModelBuilderCaptureStatus::FaceModelBuilderCaptureStatus_SystemError:
+													tCaptureString = "System Error";
+													break;
+												default:
+													break;
+												}
+												std::cout << "[Error] " + tCaptureString << std::endl;
+												cv::putText(pColorMat, "Error: " + tCaptureString,
+													cv::Point(50, 150),
+													cv::FONT_HERSHEY_SIMPLEX, 1.0f,
+													cv::Scalar(0, 0, 255), 2);
+											} // check other collection status
+										} // haven't produce face model yet, so produce it
+
+										// get face points
+										std::vector<CameraSpacePoint> tFacePoints(pFaceVertexCount);
+										if (checkResult(
+											pFaceModel[count]->CalculateVerticesForAlignment(pFaceAlignment[count], pFaceVertexCount, &tFacePoints[0]),
+											"IFaceModel:CalculateVerticesForAlignment()") != 0) {
+											// nothing
+										}
+										for (uint point = 0; point < pFaceVertexCount; point++){
+											ColorSpacePoint tFaceColorSpacePoint;
+											if (checkResult(
+												pMapper->MapCameraPointToColorSpace(tFacePoints[point], &tFaceColorSpacePoint),
+												"ICoordinateMapper:MapCameraPointToColorSpace()") != 0) {
+												// nothing
+											}
+											int x = static_cast<int>(tFaceColorSpacePoint.X),
+												y = static_cast<int>(tFaceColorSpacePoint.Y);
+											if ((x >= 0) && (x < pColorWidth) && (y >= 0) && (y < pColorHeight)){
+												cv::circle(pColorMat,
+													cv::Point(static_cast<int>(tFaceColorSpacePoint.X),
+													static_cast<int>(tFaceColorSpacePoint.Y)),
+													5, cv::Scalar(0, 0, 255), -1, CV_AA);
+											}
+										} // for face points
+
+										// face shape deformations
+										/*if (checkResult(
+											pFaceModel[count]->GetFaceShapeDeformations(
+											FaceShapeDeformations::FaceShapeDeformations_Count,
+											&pDeformations[count][0]),
+											"IFaceModel:GetFaceShapeDeformations()") != 0) {
+											// nothing
+										}*/
+
+										// draw face model
+										if (!pFaceModelProduced[count]) {
+											// face model incomplete, not to save
+											pFaceModelSaved[count] = false;
+										}
+										else {
+											if (!pFaceModelSaved[count]) {
+												// finished, save for once
+												std::cout << "[INFO] Storing the face model ... ";
+												std::string tFaceModelFileName = \
+													pDataRecordDir[count] + "face.obj";
+												std::fstream tFaceModelFile =
+													std::fstream(tFaceModelFileName, std::fstream::out);
+												pFaceModelSaved[count] = true;
+
+												for (auto vertex : tFacePoints) {
+													tFaceModelFile << "v " << vertex.X << ' ' \
+														<< vertex.Y << ' ' \
+														<< vertex.Z << '\n';
+												}
+												tFaceModelFile << "# " << pFaceVertexCount << " vertices\n";
+												for (uint inx = 0; inx < pFaceTriangleCount * 3; inx += 3) {
+													tFaceModelFile << 'f';
+													for (uint j = 0; j < 3; j++) {
+														tFaceModelFile << ' ' << pFaceTriangles[inx + j] + 1;
+													}
+													tFaceModelFile << '\n';
+												}
+												tFaceModelFile << "# " << pFaceTriangleCount << " faces\n";
+												tFaceModelFile.close();
+												std::cout << "done!\n";
+											}
+										}
+
+									} // get face alignment
+								}
+								else {
+									// ?
+								} // HD face not tracked
+							} // get HD face tracked or not
+						} // tracking id is valid
 					} // get tracking id valid
 				} // acquire latest frame OK
 				SafeRelease(tHDFaceFrame);
 			} // for BODY_COUNT
 
-		RELEASE_HD_FACE_FRAME:
+		/*RELEASE_HD_FACE_FRAME:
 			SafeRelease(tHDFaceFrame);
 			if (tHDFaceOK == false) {
 				goto RELEASE_BODY_AND_FACE_FRAME;
-			}
+			}*/
 		}
 
 	RELEASE_BODY_AND_FACE_FRAME:
