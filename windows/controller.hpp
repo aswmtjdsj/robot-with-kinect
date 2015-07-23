@@ -1301,7 +1301,7 @@ public:
 							// draw joints on depth map
 							CameraSpacePoint tCameraPts[JointType::JointType_Count];
 							DepthSpacePoint tDepthPts[JointType::JointType_Count];
-							ColorSpacePoint tColorPts[JointType::JointType_Count];
+							//ColorSpacePoint tColorPts[JointType::JointType_Count];
 							for (uint pid = 0; pid < JointType::JointType_Count; pid++) {
 								tCameraPts[pid] = tJoints[pid].Position;
 							}
@@ -1312,12 +1312,12 @@ public:
 								"ICoordinateMapper::MapCameraPointsToDepthSpace()") == 0) {
 								// nothing
 							}
-							if (checkResult(
+							/*if (checkResult(
 								pMapper->MapCameraPointsToColorSpace(
 								JointType::JointType_Count, tCameraPts, JointType::JointType_Count, tColorPts),
 								"ICoordinateMapper::MapCameraPointsToColorSpace()") == 0) {
 								// nothing
-							}
+							}*/
 							// draw
 							std::set < std::pair<uint, uint> > tConnections;
 							for (uint j = 0; j < JointType::JointType_Count; j++) {
@@ -1330,21 +1330,31 @@ public:
 										cv::Point tToDraw(tX, tY);
 										int tRadius = 5;
 										if (tJoints[j].TrackingState == TrackingState_Inferred) { // filled circle indicate inferred
-											circle(pDepthMat, tToDraw, tRadius, cv::Scalar(0, 0, 255));
+											circle(pDepthMat, tToDraw, tRadius, cv::Scalar(255, 0, 255));
 										}
 										else { // filled circle
-											circle(pDepthMat, tToDraw, tRadius, cv::Scalar(0, 0, 255), -1);
+											circle(pDepthMat, tToDraw, tRadius, cv::Scalar(255, 0, 255), -1);
 										}
 										cv::Point tTextCorner = tToDraw;
 										tTextCorner.x += tRadius;
 										tTextCorner.y += tRadius;
 										putText(pDepthMat, to_string(j), tTextCorner,
 											cv::FONT_HERSHEY_SIMPLEX, 0.5,
-											cv::Scalar(0, 255, 255), 1);
+											cv::Scalar(0, 255, 0), 1);
+										for (uint c = 0; c < pSkeletonConnection[j].size(); c++) {
+											uint a = j, b = pSkeletonConnection[j][c];
+											if (tConnections.find(std::make_pair(min(a, b), max(a, b))) == tConnections.end()
+												&& 0 <= tDepthPts[b].X && tDepthPts[b].X < pDepthWidth
+												&& 0 <= tDepthPts[b].Y && tDepthPts[b].Y < pDepthHeight) {
+												cv::line(pDepthMat, tToDraw, cv::Point(floor(tDepthPts[b].X), floor(tDepthPts[b].Y)),
+													cv::Scalar(255, 0, 255), 2);
+												tConnections.insert(std::make_pair(min(a, b), max(a, b)));
+											}
+										}
 									} // depth point within boundary
 
 									// color drawing
-									tX = floor(tColorPts[j].X), tY = floor(tColorPts[j].Y);
+									/*tX = floor(tColorPts[j].X), tY = floor(tColorPts[j].Y);
 									if (tX >= 0 && tX < pColorWidth
 										&& tY >= 0 && tY < pColorHeight) {
 										cv::Point tToDraw(tX, tY);
@@ -1372,6 +1382,7 @@ public:
 											}
 										}
 									} // color point within boundary
+									*/
 								} // if tracking
 							} // for joints
 						} // if body tracked
@@ -1483,12 +1494,12 @@ public:
 								tBB = true;
 							}
 							// extend face area
-							int ext_width = face_width * 1.5,
-								ext_height = face_height * 1.6;
+							int ext_width = face_width * 2.5,
+								ext_height = face_height * 2.5;
 							int left_offset = (ext_width - face_width) >> 1,
 								right_offset = (ext_width - face_width) >> 1,
-								up_offset = (ext_height - face_height) * 0.8,
-								down_offset = (ext_height - face_height) * 0.2;
+								up_offset = (ext_height - face_height) * 0.6,
+								down_offset = (ext_height - face_height) * 0.4;
 							if (tBoundingBox.Left - left_offset < 0) {
 								left_offset = tBoundingBox.Left;
 							}
